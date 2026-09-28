@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-canvas: #f3f5f4;
+  --color-surface: #ffffff;
+  --color-ink: #13201b;
+  --color-ink-2: #3c4a44;
+  --color-muted: #6a7872;
+  --color-line: #dce3df;
+  --color-line-soft: #ebf0ed;
+
+  --color-jade: #12805f;
+  --color-jade-deep: #0b5a43;
+  --color-jade-mist: #e3f2eb;
+  --color-jade-bead: #1f9a73;
+
+  --color-amber: #a86a0a;
+  --color-amber-mist: #fbf0da;
+  --color-danger: #b8392b;
+  --color-danger-mist: #fbe7e4;
+
+  --radius-sheet: 18px;
+  --shadow-lift: 0 1px 2px rgb(19 32 27 / 0.06), 0 8px 24px -8px rgb(19 32 27 / 0.14);
+  --shadow-sheet: 0 -8px 40px -12px rgb(19 32 27 / 0.28);
+}
+
+:root {
+  color-scheme: light;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* iOS zooms into inputs under 16px */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 15px;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-jade);
+  outline-offset: 2px;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Calendar background: hour and quarter lines */
+.cal-grid {
+  background-image:
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line-soft) 1px, transparent 1px);
+  background-size:
+    100% var(--hour),
+    100% calc(var(--hour) / 2);
+}
+
+.hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    rgb(255 255 255 / 0.55) 6px 9px
+  );
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@keyframes sheet-left {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+@utility anim-sheet-up {
+  animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@utility anim-sheet-left {
+  animation: sheet-left 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@utility anim-fade {
+  animation: fade 0.18s ease-out;
+}
+@utility pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printing an invoice: show only the invoice paper */
+@media print {
+  @page {
+    size: A5;
+    margin: 12mm;
+  }
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-plain {
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+}
+.print-only {
+  display: none;
+}

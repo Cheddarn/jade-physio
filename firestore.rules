@@ -1,0 +1,116 @@
+rules_version = '2';
+
+// Roles (collection "access", keyed by lowercase email):
+//   admin     - everything
+//   staff     - front desk: bookings, customers, checkout, vouchers, invoices (no void, no reports)
+//   therapist - read schedule and patients; can only start/undo their own sessions
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    function accessPath() {
+      return /databases/$(database)/documents/access/$(myEmail());
+    }
+    function member() {
+      return signedIn() && exists(accessPath());
+    }
+    function role() {
+      return get(accessPath()).data.role;
+    }
+    function isAdmin() {
+      return member() && role() == 'admin';
+    }
+    function isDesk() {
+      return member() && role() in ['admin', 'staff'];
+    }
+    function isTherapist() {
+      return member() && role() == 'therapist';
+    }
+    function myStaffId() {
+      return get(accessPath()).data.staffId;
+    }
+    function setupDone() {
+      return exists(/databases/$(database)/documents/meta/setup);
+    }
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ---------- access list ----------
+    match /access/{email} {
+      allow read: if signedIn() && (myEmail() == email || isAdmin());
+      // Admins add people. The very first account may add itself as admin once,
+      // in the same batch that creates meta/setup.
+      allow create: if isAdmin()
+        || (signedIn() && myEmail() == email && !setupDone()
+            && existsAfter(/databases/$(database)/documents/meta/setup)
+            && request.resource.data.role == 'admin');
+      // Nobody can change or remove their own access.
+      allow update, delete: if isAdmin() && myEmail() != email;
+    }
+
+    match /meta/setup {
+      allow read: if true;
+      allow create: if signedIn() && !setupDone()
+        && existsAfter(/databases/$(database)/documents/access/$(myEmail()));
+      allow update, delete: if false;
+    }
+
+    // Invoice number counter, bumped inside every checkout.
+    match /meta/counters {
+      allow read, write: if isDesk();
+    }
+
+    // ---------- catalogue ----------
+    match /staff/{id} {
+      allow read: if member();
+      allow write: if isAdmin();
+    }
+    match /services/{id} {
+      allow read: if member();
+      allow write: if isAdmin();
+    }
+    match /packages/{id} {
+      allow read: if member();
+      allow write: if isAdmin();
+    }
+
+    // ---------- operations ----------
+    match /customers/{id} {
+      allow read: if member();
+      allow create, update: if isDesk();
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{id} {
+      allow read: if member();
+      allow create, delete: if isDesk();
+      allow update: if isDesk()
+        || (isTherapist()
+            && resource.data.staffId == myStaffId()
+            && onlyChanged(['status'])
+            && resource.data.status in ['booked', 'in_session']
+            && request.resource.data.status in ['booked', 'in_session']);
+    }
+
+    match /vouchers/{id} {
+      allow read: if member();
+      // Staff create vouchers only by selling a package; manual vouchers are admin-only.
+      allow create: if isAdmin() || (isDesk() && request.resource.data.source == 'sale');
+      // Staff redeem sessions at checkout but cannot void a voucher.
+      allow update: if isAdmin() || (isDesk() && request.resource.data.status != 'void');
+      allow delete: if false;
+    }
+
+    match /sales/{id} {
+      allow read, create: if isDesk();
+      allow update: if isAdmin(); // voiding an invoice
+      allow delete: if false;
+    }
+  }
+}
