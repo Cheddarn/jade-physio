@@ -469,7 +469,10 @@ export interface BookingRequest {
 
 /* ---------------- Restock ---------------- */
 
-/** An item someone noticed is running low. Anyone ticks it off once it's bought. */
+/** Requested by anyone, ordered by the manager, received by whoever is there when it arrives. */
+export type RestockStatus = "requested" | "ordered" | "received";
+
+/** An item someone noticed is running low. The price lives in the manager's expenses, not here. */
 export interface RestockItem {
   item: string;
   qty: number;
@@ -481,10 +484,31 @@ export interface RestockItem {
   createdAt: number;
   createdBy: string;
   createdByName: string;
+  /** Missing on requests from before the manager step: then `done` means received. */
+  status?: RestockStatus;
+  orderedAt?: number | null;
+  orderedBy?: string | null;
+  orderedByName?: string | null;
+  /** Received: kept as done/doneAt/doneBy so older requests read the same. */
   done: boolean;
   doneAt?: number | null;
   doneBy?: string | null;
   doneByName?: string | null;
+}
+
+/** Money going out, for the manager's profit report. Only the manager can read these. */
+export interface Expense {
+  dateKey: string;
+  name: string;
+  amount: number;
+  /** "hpp": cost of what is used or sold, lowers gross profit. "operasional": running costs, lowers net profit. */
+  kind: "hpp" | "operasional";
+  note?: string;
+  /** Set when it comes from a restock order (doc id is then `restock_<id>`). */
+  restockId?: string | null;
+  createdBy: string;
+  createdByName: string;
+  createdAt: number;
 }
 
 export interface Access {

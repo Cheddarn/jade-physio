@@ -28,8 +28,8 @@ export const ROLE_SHORT: Record<Role, string> = {
 };
 
 export const ROLE_HINT: Record<Role, string> = {
-  admin: "Front desk. Semua menu, termasuk laporan, katalog, pembatalan faktur, dan pengaturan akses.",
-  manager: "Semua menu operasional, laporan, katalog, dan pembatalan faktur. Tidak bisa mengatur akses login.",
+  admin: "Front desk. Semua menu, termasuk laporan pemasukan, katalog, pembatalan faktur, dan pengaturan akses. Tidak melihat harga restock dan laba.",
+  manager: "Semua menu operasional, laporan, katalog, dan pembatalan faktur, plus memproses restock dan melihat biaya serta laba. Tidak bisa mengatur akses login.",
   therapist: "Alur pasien dan jadwal sendiri, keluhan pasien. Memulai dan menyelesaikan sesi, tanpa akses ke uang.",
   cleaning: "Hanya tugas sepatu pasien di Alur pasien: ganti sepatu saat datang, kembalikan saat selesai.",
   patient: "Akun pasien: booking sendiri untuk dirinya dan keluarganya. Pasien biasanya mendaftar sendiri.",
@@ -60,6 +60,8 @@ export type Cap =
   | "discounts.manage" // create discounts, give a manual discount
   | "templates" // wording of WhatsApp messages to patients
   | "memos" // the desk's own dated reminders on the calendar
+  | "restock.manage" // process restock requests: name, quantity, price, ordered
+  | "profit" // costs, gross and net profit
   | "portal";
 
 const ALL: Cap[] = [
@@ -87,10 +89,15 @@ const ALL: Cap[] = [
   "discounts.manage",
   "templates",
   "memos",
+  "restock.manage",
+  "profit",
 ];
 
+/** Only the manager: buying stock, costs and profit. Admin, the front desk, does everything else. */
+const MANAGER_ONLY: Cap[] = ["restock.manage", "profit"];
+
 const CAPS: Record<Role, Cap[]> = {
-  admin: ALL,
+  admin: ALL.filter((c) => !MANAGER_ONLY.includes(c)),
   manager: ALL.filter((c) => c !== "team"),
   therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock"],
   cleaning: ["flow.view", "restock"],
@@ -113,6 +120,7 @@ export const ROUTE_CAP: [prefix: string, cap: Cap][] = [
   ["/faktur", "sales.view"],
   ["/voucher", "vouchers.view"],
   ["/laporan", "reports"],
+  ["/laba", "profit"],
   ["/katalog", "catalog"],
   ["/template-wa", "templates"],
   ["/pengingat", "memos"],

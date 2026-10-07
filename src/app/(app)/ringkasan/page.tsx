@@ -149,7 +149,8 @@ export default function RingkasanPage() {
     }
     for (const r of RS) {
       out.push({ at: r.createdAt, kind: "restock", icon: PackagePlus, tone: r.urgent ? "danger" : undefined, text: `${r.createdByName} mengajukan ${r.item} ${r.qty} ${r.unit}${r.urgent ? " (urgent)" : ""}` });
-      if (r.done && r.doneAt) out.push({ at: r.doneAt, kind: "restock", icon: PackagePlus, tone: "jade", text: `${r.doneByName} me-restock ${r.item}` });
+      if (r.orderedAt) out.push({ at: r.orderedAt, kind: "restock", icon: PackagePlus, text: `${r.orderedByName} memesan ${r.item} ${r.qty} ${r.unit}` });
+      if (r.done && r.doneAt) out.push({ at: r.doneAt, kind: "restock", icon: PackagePlus, tone: "jade", text: `${r.doneByName} menerima ${r.item}` });
     }
     for (const a of A) {
       out.push({ at: a.inAt, kind: "tim", icon: Clock, text: `${a.name} absen masuk` });

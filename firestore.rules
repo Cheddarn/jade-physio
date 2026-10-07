@@ -1,8 +1,8 @@
 rules_version = '2';
 
 // Roles (collection "access", keyed by lowercase email):
-//   admin     - front desk; everything
-//   manager   - everything except the access list
+//   admin     - front desk; everything except restock orders, costs and profit
+//   manager   - everything except the access list, plus restock orders, costs and profit
 //   therapist - read schedule and patients; can only start/finish their own sessions
 //   cleaning  - patient flow only: mark shoes changed / returned
 //   patient   - self-registered; own portal account and own booking requests only
@@ -28,6 +28,10 @@ service cloud.firestore {
     }
     function isAdmin() {
       return member() && role() == 'admin';
+    }
+    // The manager role only: restock orders, costs and profit.
+    function managerOnly() {
+      return member() && role() == 'manager';
     }
     // Admin and manager: catalogue, reports, voids.
     function isManager() {
@@ -117,12 +121,25 @@ service cloud.firestore {
     // ---------- restock requests ----------
     match /restock/{id} {
       allow read: if staffRole();
-      allow create: if staffRole() && request.resource.data.createdBy == myEmail() && request.resource.data.done == false;
-      // Anyone at the clinic can tick an item off (or untick it).
-      allow update: if isManager()
-        || (staffRole() && onlyChanged(['done', 'doneAt', 'doneBy', 'doneByName']))
-        || (resource.data.createdBy == myEmail() && resource.data.done == false);
-      allow delete: if isManager() || (resource.data.createdBy == myEmail() && resource.data.done == false);
+      allow create: if staffRole() && request.resource.data.createdBy == myEmail()
+        && request.resource.data.done == false && request.resource.data.status == 'requested';
+      // The manager orders (name, quantity, status). Anyone at the clinic confirms an ordered item arrived, or undoes that.
+      // Whoever asked may still change or withdraw their request until it is ordered.
+      allow update: if managerOnly()
+        || (staffRole() && onlyChanged(['status', 'done', 'doneAt', 'doneBy', 'doneByName'])
+            && resource.data.get('status', 'requested') in ['ordered', 'received']
+            && request.resource.data.status in ['ordered', 'received'])
+        || (resource.data.createdBy == myEmail() && resource.data.done == false
+            && resource.data.get('status', 'requested') == 'requested'
+            && request.resource.data.get('status', 'requested') == 'requested');
+      allow delete: if managerOnly()
+        || (resource.data.createdBy == myEmail() && resource.data.done == false
+            && resource.data.get('status', 'requested') == 'requested');
+    }
+
+    // Costs (restock prices and fees the manager adds), for the profit report. The manager only.
+    match /expenses/{id} {
+      allow read, write: if managerOnly();
     }
 
     // ---------- therapy reports (doc id = booking id) ----------

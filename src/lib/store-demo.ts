@@ -157,7 +157,7 @@ function seed(): Data {
 
   const d: Data = {
     staff: {}, services: {}, packages: {}, customers: {}, bookings: {}, vouchers: {}, sales: {}, meta: {}, access: {}, visits: {},
-    team: {}, attendance: {}, reports: {}, restock: {}, requests: {}, accounts: {}, discounts: {}, receipts: {}, memos: {},
+    team: {}, attendance: {}, reports: {}, restock: {}, requests: {}, accounts: {}, discounts: {}, receipts: {}, memos: {}, expenses: {},
   };
   const staff = [
     { id: "st1", name: "Ft. Andini", color: "jade", gender: "P" },
@@ -535,31 +535,50 @@ function seed(): Data {
     };
   });
 
-  // ---- Restock: this month, some done ----
-  const items: [string, number, string, string, boolean][] = [
-    ["Gel USG", 3, "botol", "Alat terapi", true],
-    ["Tisu wajah", 2, "box", "Kebersihan", false],
-    ["Handuk kecil", 10, "pcs", "Linen & handuk", false],
-    ["Elektroda TENS", 4, "pak", "Alat terapi", true],
-    ["Sabun cuci tangan", 2, "botol", "Kebersihan", false],
-    ["Kertas struk", 5, "roll", "ATK", false],
-    ["Kinesio tape", 3, "roll", "Medis & obat", false],
-    ["Air mineral galon", 2, "pcs", "Pantry", false],
-    ["Sarung bantal", 8, "pcs", "Linen & handuk", false],
+  // ---- Restock: this month. Older requests were ordered by the manager (with a price) and mostly received; recent ones wait ----
+  const items: [string, number, string, string, boolean, number][] = [
+    ["Gel USG", 3, "botol", "Alat terapi", true, 45000],
+    ["Tisu wajah", 2, "box", "Kebersihan", false, 18000],
+    ["Handuk kecil", 10, "pcs", "Linen & handuk", false, 22000],
+    ["Elektroda TENS", 4, "pak", "Alat terapi", true, 65000],
+    ["Sabun cuci tangan", 2, "botol", "Kebersihan", false, 27000],
+    ["Kertas struk", 5, "roll", "ATK", false, 9000],
+    ["Kinesio tape", 3, "roll", "Medis & obat", false, 95000],
+    ["Air mineral galon", 2, "pcs", "Pantry", false, 21000],
+    ["Sarung bantal", 8, "pcs", "Linen & handuk", false, 35000],
   ];
   const people = team.filter(([, , role]) => role !== "admin");
-  items.forEach(([item, qty, unit, category, urgent], i) => {
+  items.forEach(([item, qty, unit, category, urgent, unitPrice], i) => {
     const back = Math.min(nowD.getDate() - 1, i * 2);
     const key = addDays(today, -back);
     const by = people[i % people.length];
-    const createdAt = atTime(key, `${9 + (i % 7)}:${i % 2 ? "30" : "10"}`);
-    const done = back > 2 && i % 3 !== 0;
+    const createdAt = Math.min(atTime(key, `${9 + (i % 7)}:${i % 2 ? "30" : "10"}`), now - 3_600_000);
+    const status = back <= 2 ? "requested" : i % 3 === 0 ? "ordered" : "received";
+    const orderedAt = status === "requested" ? null : createdAt + 4 * 3_600_000;
+    const doneAt = status === "received" ? createdAt + 86_400_000 : null;
     const doneBy = people[(i + 2) % people.length];
-    d.restock[rid()] = {
-      item, qty, unit, category, urgent, note: i === 0 ? "Tinggal 1 botol di ruang 1" : "", dateKey: key, createdAt: Math.min(createdAt, now - 3_600_000),
-      createdBy: by[0], createdByName: by[1], done, doneAt: done ? createdAt + 86_400_000 : null, doneBy: done ? doneBy[0] : null, doneByName: done ? doneBy[1] : null,
+    const id = rid();
+    d.restock[id] = {
+      item, qty, unit, category, urgent, note: i === 0 ? "Tinggal 1 botol di ruang 1" : "", dateKey: key, createdAt,
+      createdBy: by[0], createdByName: by[1], status,
+      orderedAt, orderedBy: orderedAt ? "manajer@jadephysio.id" : null, orderedByName: orderedAt ? "Manajer Demo" : null,
+      done: status === "received", doneAt, doneBy: doneAt ? doneBy[0] : null, doneByName: doneAt ? doneBy[1] : null,
     };
+    if (orderedAt)
+      d.expenses[`restock_${id}`] = {
+        dateKey: dateKey(orderedAt), name: `Restock: ${item} (${qty} ${unit})`, amount: unitPrice * qty, kind: "hpp", note: "", restockId: id,
+        createdBy: "manajer@jadephysio.id", createdByName: "Manajer Demo", createdAt: orderedAt,
+      };
   });
+
+  // ---- The manager's other costs this month ----
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const cost = (name: string, amount: number, kind: string, key: string, note = "") =>
+    (d.expenses[rid()] = { dateKey: key, name, amount, kind, note, restockId: null, createdBy: "manajer@jadephysio.id", createdByName: "Manajer Demo", createdAt: atTime(key, "10:00") });
+  cost("Sewa ruko", 6500000, "operasional", monthStart);
+  cost("Listrik, air, dan internet", 1350000, "operasional", monthStart > addDays(today, -3) ? monthStart : addDays(today, -3));
+  cost("Iklan TikTok", 750000, "operasional", today < addDays(monthStart, 4) ? today : addDays(monthStart, 4), "Promo paket 5 sesi");
+  cost("Bahan habis pakai (minyak, kassa)", 480000, "hpp", today);
 
   // ---- Patient portal: Rina's account books for herself and her son ----
   d.accounts["rina@gmail.com"] = {
