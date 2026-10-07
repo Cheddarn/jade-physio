@@ -7,16 +7,16 @@
   --color-surface: #ffffff;
   --color-ink: #13201b;
   --color-ink-2: #3c4a44;
-  --color-muted: #6a7872;
+  --color-muted: #5c6a64;
   --color-line: #dce3df;
   --color-line-soft: #ebf0ed;
 
-  --color-jade: #12805f;
+  --color-jade: #0f7657;
   --color-jade-deep: #0b5a43;
   --color-jade-mist: #e3f2eb;
   --color-jade-bead: #1f9a73;
 
-  --color-amber: #a86a0a;
+  --color-amber: #8c5806;
   --color-amber-mist: #fbf0da;
   --color-danger: #b8392b;
   --color-danger-mist: #fbe7e4;
@@ -90,6 +90,12 @@ textarea {
     100% calc(var(--hour) / 2);
 }
 
+/* Calendar: time outside the clinic's hours or a physio's shift */
+.off-hours {
+  background-color: rgb(106 120 114 / 0.07);
+  background-image: repeating-linear-gradient(-45deg, transparent 0 7px, rgb(106 120 114 / 0.08) 7px 9px);
+}
+
 .hatch {
   background-image: repeating-linear-gradient(
     -45deg,
@@ -110,6 +116,12 @@ textarea {
     opacity: 0;
   }
 }
+@keyframes pop {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+}
 @keyframes fade {
   from {
     opacity: 0;
@@ -125,6 +137,9 @@ textarea {
 }
 @utility anim-sheet-left {
   animation: sheet-left 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@utility anim-pop {
+  animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @utility anim-fade {
   animation: fade 0.18s ease-out;

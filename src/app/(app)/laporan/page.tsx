@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, PageHeader, Spinner, cx } from "@/components/ui";
+import { Card, PageHeader, ScrollX, Spinner, cx } from "@/components/ui";
 import { DateRangePicker, presetRange, type Range } from "@/components/DateRange";
 import { useCollection, useStaff } from "@/lib/hooks";
 import { voucherState } from "@/lib/actions";
@@ -35,6 +35,7 @@ export default function LaporanPage() {
     };
     const byStaff = new Map<string, { name: string; sessions: number; viaVoucher: number; value: number; cash: number }>();
     const byService = new Map<string, { name: string; sessions: number; value: number }>();
+    const bySeller = new Map<string, { name: string; count: number; value: number }>();
 
     for (const s of sales) {
       if (s.paymentMethod !== "voucher") {
@@ -45,6 +46,11 @@ export default function LaporanPage() {
         if (i.kind === "package") {
           pkgCount += i.qty;
           pkgRevenue += i.amount;
+          const key = i.soldBy ?? s.createdBy;
+          const se = bySeller.get(key) ?? { name: i.soldByName ?? s.createdByName ?? key, count: 0, value: 0 };
+          se.count += i.qty;
+          se.value += i.amount;
+          bySeller.set(key, se);
           continue;
         }
         sessions += i.qty;
@@ -100,6 +106,7 @@ export default function LaporanPage() {
       byMethod,
       byStaff: [...byStaff.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.sessions - a.sessions),
       byService: [...byService.values()].sort((a, b) => b.sessions - a.sessions),
+      bySeller: [...bySeller.values()].sort((a, b) => b.value - a.value),
       series,
       single,
     };
@@ -183,7 +190,7 @@ export default function LaporanPage() {
                     <span className="font-semibold text-jade-deep">Voucher dipakai</span>
                     <span className="tnum text-jade-deep">
                       <span className="font-semibold">{num(r.voucherSessions)} sesi</span>
-                      <span className="ml-2 opacity-75">senilai {rupiah(r.voucherValue)}</span>
+                      <span className="ml-2">senilai {rupiah(r.voucherValue)}</span>
                     </span>
                   </div>
                 </div>
@@ -212,7 +219,7 @@ export default function LaporanPage() {
 
             <Card className="mt-4 overflow-hidden">
               <h2 className="px-4 pt-4 font-bold md:px-5 md:pt-5">Per terapis</h2>
-              <div className="overflow-x-auto">
+              <ScrollX label="Per terapis">
                 <table className="mt-3 w-full min-w-[520px] text-sm">
                   <thead>
                     <tr className="border-y border-line-soft text-left text-[13px] text-muted">
@@ -250,7 +257,23 @@ export default function LaporanPage() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </ScrollX>
+            </Card>
+
+            <Card className="mt-4 overflow-hidden">
+              <h2 className="px-4 pt-4 font-bold md:px-5 md:pt-5">Penjualan paket per staf</h2>
+              <ul className="mt-3">
+                {r.bySeller.map((s) => (
+                  <li key={s.name} className="flex items-baseline justify-between gap-3 border-t border-line-soft px-4 py-3 text-sm md:px-5">
+                    <span className="truncate font-semibold">{s.name}</span>
+                    <span className="tnum shrink-0">
+                      <span className="font-semibold">{num(s.count)} paket</span>
+                      <span className="ml-2 text-muted">{rupiah(s.value)}</span>
+                    </span>
+                  </li>
+                ))}
+                {r.bySeller.length === 0 && <li className="border-t border-line-soft px-5 py-6 text-center text-sm text-muted">Belum ada paket terjual di rentang ini.</li>}
+              </ul>
             </Card>
 
             <Card className="mt-4 overflow-hidden">

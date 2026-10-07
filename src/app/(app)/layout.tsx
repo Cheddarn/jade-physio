@@ -7,7 +7,7 @@ import { Lock, ShieldCheck } from "lucide-react";
 import { AppShell, Logo } from "@/components/AppShell";
 import { Button, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { ROLE_LABEL, routeAllowed } from "@/lib/roles";
+import { ROLE_LABEL, homeFor, routeAllowed } from "@/lib/roles";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { state, signOut } = useAuth();
@@ -54,8 +54,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <p className="mt-1.5 max-w-sm text-sm text-muted">
             Akun Anda ({ROLE_LABEL[state.user.role]}) tidak punya akses ke menu ini. Hubungi admin jika perlu.
           </p>
-          <Link href="/kalender" className="mt-5">
-            <Button variant="secondary">Ke kalender</Button>
+          <Link href={homeFor(state.user.role)} className="mt-5">
+            <Button variant="secondary">Ke halaman utama</Button>
           </Link>
         </div>
       </AppShell>

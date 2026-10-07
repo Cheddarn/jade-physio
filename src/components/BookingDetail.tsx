@@ -155,6 +155,7 @@ export function BookingDetail({
 
         <dl className="mt-6 divide-y divide-line-soft rounded-xl border border-line">
           <DetailRow label="Layanan" value={b.serviceName} />
+          {b.packageName && b.status !== "paid" && <DetailRow label="Paket" value={`Beli ${b.packageName} saat checkout`} />}
           <DetailRow
             label="Terapis"
             value={

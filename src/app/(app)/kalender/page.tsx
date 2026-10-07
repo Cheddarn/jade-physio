@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Play, Plus, Sparkles, Ticket } from "lucide-react";
-import { Avatar, Button, Empty, IconButton, Segmented, Spinner, cx, errorText, useToast } from "@/components/ui";
+import { BellRing, CalendarDays, Check, ChevronLeft, ChevronRight, Globe, Play, Plus, Sparkles, Ticket } from "lucide-react";
+import { Avatar, Button, Empty, Fab, IconButton, Segmented, Spinner, cx, errorText, useToast } from "@/components/ui";
 import { BookingSheet, type BookingDraft } from "@/components/BookingSheet";
 import { BookingDetail, StatusBadge } from "@/components/BookingDetail";
 import { useCollection, useCustomers, useMediaQuery, useNow, useStaff } from "@/lib/hooks";
@@ -12,23 +12,59 @@ import { canRunSession } from "@/lib/roles";
 import { seedCatalog, setBookingStatus, voucherCovers, voucherState } from "@/lib/actions";
 import { BUSINESS, addDays, atTime, dateKey, fromDateKey, minutesOfDay, pad, remaining, staffColor, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
-import type { Booking, Staff, Voucher } from "@/lib/types";
+import type { Booking, BookingRequest, DayHours, Staff, Voucher } from "@/lib/types";
+import { RequestsSheet, usePendingRequests } from "@/components/RequestsSheet";
+import { DatePicker } from "@/components/DatePicker";
+import { QueryAction } from "@/components/QueryAction";
+import { ReminderSheet, useReminders } from "@/components/ReminderSheet";
+import { dayWord } from "@/lib/reminders";
+import { dot, fromMin, hoursOn, shiftOn, toMin, useSettings, useTeam } from "@/lib/settings";
 
 const HOUR = 88; // px per hour
 const SNAP = 15;
 
 type View = "jadwal" | "daftar";
+const VIEW_KEY = "jade-physio-kalender-view";
 
 export default function KalenderPage() {
   const [day, setDay] = useState(dateKey());
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  const [view, setView] = useState<View>("jadwal");
+  const [view, setViewState] = useState<View>("jadwal");
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_KEY);
+      // Phones: the list reads better than narrow columns unless the grid was picked before.
+      if (saved === "daftar" || (!saved && window.innerWidth < 768)) setViewState("daftar");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      window.localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
   const now = useNow();
   const today = dateKey(now);
   const { staff, loading: staffLoading } = useStaff();
   const { customers } = useCustomers();
   const { rows: bookingRows, loading } = useCollection<Booking>("bookings", [["dateKey", "==", day]]);
   const { rows: activeVouchers } = useCollection<Voucher>("vouchers", [["status", "==", "active"]]);
+  const { settings } = useSettings();
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
+  const [requestFocus, setRequestFocus] = useState<string | null>(null);
+  const { team } = useTeam();
+  const dayHours = hoursOn(settings, day);
+  // Each physio's shift that day, when the admin has set one (undefined = no schedule kept).
+  const shifts = useMemo(() => {
+    const m = new Map<string, DayHours | null>();
+    for (const t of team) if (t.staffId && t.schedule && Object.keys(t.schedule).length) m.set(t.staffId, shiftOn(t, day));
+    return m;
+  }, [team, day]);
 
   const [draft, setDraft] = useState<BookingDraft | null>(null);
   const [notLinkedSeen, setNotLinkedSeen] = useState(false);
@@ -38,6 +74,7 @@ export default function KalenderPage() {
   const user = useUser();
   const can = useCan();
   const manage = can("bookings.manage");
+  const remindDay = day > today ? day : addDays(today, 1);
   const isTherapist = user.role === "therapist";
   const [mineOnly, setMineOnly] = useState(true);
   const linked = isTherapist && !!user.staffId && staff.some((s) => s.id === user.staffId);
@@ -82,6 +119,8 @@ export default function KalenderPage() {
       },
       staffId: b.staffId,
       serviceId: b.serviceId,
+      packageId: b.packageId ?? undefined,
+      voucherId: b.voucherId ?? undefined,
       startAt: b.startAt,
       durationMin: b.durationMin,
       notes: b.notes,
@@ -104,21 +143,17 @@ export default function KalenderPage() {
             <IconButton label="Hari sebelumnya" onClick={() => setDay(addDays(day, -1))}>
               <ChevronLeft className="size-5" />
             </IconButton>
-            <label className="relative cursor-pointer">
+            <DatePicker value={day} onChange={setDay} marks={{ col: "bookings", skip: (b) => b.status === "cancelled" }}>
               <span className="block min-w-0">
-                <span className="block text-[13px] font-semibold text-jade">{relative ?? weekday}</span>
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-jade">
+                  {relative ?? weekday}
+                  <CalendarDays className="size-3.5" />
+                </span>
                 <span className="block text-[17px] leading-tight font-bold tracking-[-0.01em] md:text-[22px]">
                   {relative ? `${weekday}, ${dateLabel}` : dateLabel}
                 </span>
               </span>
-              <input
-                type="date"
-                aria-label="Pilih tanggal"
-                value={day}
-                onChange={(e) => e.target.value && setDay(e.target.value)}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
+            </DatePicker>
             <IconButton label="Hari berikutnya" onClick={() => setDay(addDays(day, 1))}>
               <ChevronRight className="size-5" />
             </IconButton>
@@ -129,6 +164,8 @@ export default function KalenderPage() {
             )}
           </div>
           <div className="hidden items-center gap-2 md:flex">
+            {can("requests.manage") && <RequestsButton onClick={() => (setRequestFocus(null), setRequestsOpen(true))} />}
+            {manage && <RemindButton day={remindDay} onClick={() => setRemindOpen(true)} />}
             {linked && <MineToggle mine={mineOnly} setMine={setMineOnly} />}
             <ViewToggle view={view} setView={setView} />
             {manage && (
@@ -138,15 +175,20 @@ export default function KalenderPage() {
             )}
           </div>
         </div>
-        <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 text-[13px] md:mx-0 md:px-0">
-          <div className="flex shrink-0 gap-2 md:hidden">
-            {linked && <MineToggle mine={mineOnly} setMine={setMineOnly} />}
-            <ViewToggle view={view} setView={setView} />
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 md:hidden">
+          {can("requests.manage") && <RequestsButton onClick={() => (setRequestFocus(null), setRequestsOpen(true))} />}
+          {manage && <RemindButton day={remindDay} onClick={() => setRemindOpen(true)} />}
+          {linked && <MineToggle mine={mineOnly} setMine={setMineOnly} />}
+          <ViewToggle view={view} setView={setView} />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
           <Stat label="booking" value={bookings.length} />
           <Stat label="sedang sesi" value={counts.in_session} tone="amber" />
           <Stat label="menunggu" value={counts.booked} />
           <Stat label="lunas" value={counts.paid} tone="jade" />
+          <span className="inline-flex h-7 shrink-0 items-center rounded-full border border-line px-3 font-medium text-ink-2">
+            {dayHours ? `Buka ${dot(dayHours.start)}–${dot(dayHours.end)}` : "Klinik tutup"}
+          </span>
         </div>
       </header>
 
@@ -198,31 +240,51 @@ export default function KalenderPage() {
           now={now}
           isToday={day === today}
           staff={columns}
+          clinic={dayHours}
+          shifts={shifts}
           bookings={bookings}
           compact={!isDesktop}
           voucherFor={voucherFor}
           onSlot={manage ? (staffId, startAt) => openNew({ staffId, startAt }) : undefined}
           onOpen={(b) => setSelectedId(b.id)}
+          showRequests={can("requests.manage")}
+          onRequest={(id) => (setRequestFocus(id), setRequestsOpen(true))}
         />
       ) : (
         <ListView bookings={bookings} staff={staff} voucherFor={voucherFor} onOpen={(b) => setSelectedId(b.id)} />
       )}
 
+      {manage && <QueryAction name="baru" run={() => openNew(slotDraft(day))} />}
+      {manage && <QueryAction name="pengingat" run={() => setRemindOpen(true)} />}
       {/* Phone: floating action */}
       {!noSetup && manage && (
-        <button
-          onClick={() => openNew(slotDraft(day))}
-          aria-label="Booking baru"
-          className="fixed right-4 bottom-[calc(84px+var(--safe-bottom))] z-20 flex h-14 items-center gap-2 rounded-2xl bg-jade px-5 font-semibold text-white shadow-[var(--shadow-lift)] active:bg-jade-deep md:hidden"
-        >
-          <Plus className="size-5" />
-          Booking
-        </button>
+        <Fab label="Booking baru" text="Booking" icon={<Plus className="size-5" />} onClick={() => openNew(slotDraft(day))} />
       )}
 
       <BookingSheet open={!!draft} draft={draft} onClose={() => setDraft(null)} />
+      {can("requests.manage") && <RequestsSheet open={requestsOpen} focusId={requestFocus} onClose={() => setRequestsOpen(false)} />}
+      {manage && <ReminderSheet open={remindOpen} initialDay={remindDay} onClose={() => setRemindOpen(false)} />}
       {selected && <BookingDetail booking={selected} staff={staff} onClose={() => setSelectedId(null)} onEdit={openEdit} />}
     </div>
+  );
+}
+
+/** Reminders for the shown day when it is ahead, otherwise for tomorrow. */
+function RemindButton({ day, onClick }: { day: string; onClick: () => void }) {
+  const { open } = useReminders(day);
+  return (
+    <Button size="sm" variant="secondary" icon={<BellRing className="size-3.5" />} onClick={onClick} title={`Ingatkan pasien ${dayWord(day)}`}>
+      Pengingat{open ? ` (${open})` : ""}
+    </Button>
+  );
+}
+
+function RequestsButton({ onClick }: { onClick: () => void }) {
+  const n = usePendingRequests().length;
+  return (
+    <Button size="sm" variant={n ? "primary" : "secondary"} icon={<Globe className="size-3.5" />} onClick={onClick}>
+      Permintaan{n ? ` (${n})` : ""}
+    </Button>
   );
 }
 
@@ -316,16 +378,25 @@ function Timeline({
   now,
   isToday,
   staff,
+  clinic,
+  shifts,
   bookings,
   compact,
   voucherFor,
   onSlot,
   onOpen,
+  showRequests,
+  onRequest,
 }: {
+  /** Draw this day's pending portal requests (front desk only). */
+  showRequests?: boolean;
+  onRequest?: (id: string) => void;
   day: string;
   now: number;
   isToday: boolean;
   staff: Row<Staff>[];
+  clinic: DayHours | null;
+  shifts: Map<string, DayHours | null>;
   bookings: Row<Booking>[];
   compact: boolean;
   voucherFor: (b: Booking) => Row<Voucher> | undefined;
@@ -333,12 +404,18 @@ function Timeline({
   onOpen: (b: Row<Booking>) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
-  // Widen the day if bookings fall outside opening hours.
-  const open = Math.min(BUSINESS.openHour, ...bookings.map((b) => Math.floor(minutesOfDay(b.startAt) / 60)));
+  const [hover, setHover] = useState<{ staffId: string; min: number } | null>(null);
+  const pending = usePendingRequests(!!showRequests);
+  const dayRequests = pending.filter((r) => r.dateKey === day);
+  // The clinic's hours that day, widened if bookings fall outside them.
+  const openMin = clinic ? toMin(clinic.start) : BUSINESS.openHour * 60;
+  const closeMin = clinic ? toMin(clinic.end) : BUSINESS.closeHour * 60;
+  const open = Math.min(Math.floor(openMin / 60), ...bookings.map((b) => Math.floor(minutesOfDay(b.startAt) / 60)));
   const close = Math.max(
-    BUSINESS.closeHour,
+    Math.ceil(closeMin / 60),
     ...bookings.map((b) => Math.ceil((minutesOfDay(b.startAt) + b.durationMin) / 60)),
   );
+  const yOf = (min: number) => ((min - open * 60) / 60) * HOUR;
   const hours = Array.from({ length: close - open }, (_, i) => open + i);
   const heightPx = hours.length * HOUR;
   const nowMin = minutesOfDay(now);
@@ -360,12 +437,22 @@ function Timeline({
     return m;
   }, [staff, bookings]);
 
+  const slotAt = (e: React.MouseEvent<HTMLDivElement>) => {
+    const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+    return open * 60 + Math.floor(((y / HOUR) * 60) / SNAP) * SNAP;
+  };
+
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, staffId: string) {
     if (!onSlot || e.target !== e.currentTarget) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const min = open * 60 + Math.floor(((y / HOUR) * 60) / SNAP) * SNAP;
+    const min = slotAt(e);
     onSlot(staffId, atTime(day, `${pad(Math.floor(min / 60))}:${pad(min % 60)}`));
+  }
+
+  /** Highlight the 15-minute cell under the mouse, only over empty space. */
+  function handleHover(e: React.MouseEvent<HTMLDivElement>, staffId: string) {
+    if (!onSlot || e.target !== e.currentTarget) return setHover(null);
+    const min = slotAt(e);
+    if (hover?.staffId !== staffId || hover.min !== min) setHover({ staffId, min });
   }
 
   return (
@@ -426,13 +513,53 @@ function Timeline({
             )}
           </div>
 
-          {staff.map((s) => (
+          {staff.map((s) => {
+            const shift = shifts.get(s.id);
+            const hasSchedule = shifts.has(s.id);
+            // Grey out the time this physio isn't working, and when the clinic is closed.
+            const off: [number, number, string][] = [];
+            const dayStart = open * 60;
+            const dayEnd = close * 60;
+            if (!clinic) off.push([dayStart, dayEnd, "Klinik tutup"]);
+            else if (hasSchedule && !shift) off.push([dayStart, dayEnd, "Libur"]);
+            else {
+              const from = Math.max(openMin, shift ? toMin(shift.start) : openMin);
+              const to = Math.min(closeMin, shift ? toMin(shift.end) : closeMin);
+              if (from > dayStart) off.push([dayStart, from, shift ? "Belum masuk shift" : "Belum buka"]);
+              if (to < dayEnd) off.push([to, dayEnd, shift && toMin(shift.end) < closeMin ? "Selesai shift" : "Tutup"]);
+            }
+            return (
             <div
               key={s.id}
               onClick={(e) => handleColumnClick(e, s.id)}
+              onMouseMove={(e) => handleHover(e, s.id)}
+              onMouseLeave={() => setHover(null)}
               className={cx("cal-grid relative min-w-[168px] flex-1 border-l border-line-soft md:min-w-[200px]", onSlot && "cursor-cell")}
               style={{ height: heightPx }}
             >
+              {off.map(([a, b, label]) => (
+                <div
+                  key={a}
+                  className="off-hours pointer-events-none absolute inset-x-0 flex items-start justify-center"
+                  style={{ top: yOf(a), height: yOf(b) - yOf(a) }}
+                >
+                  {yOf(b) - yOf(a) > 40 && <span className="mt-1.5 rounded-full bg-surface/90 px-2 py-0.5 text-[11px] font-semibold text-muted">{label}</span>}
+                </div>
+              ))}
+              {dayRequests
+                .filter((r) => (r.staffId ?? staff[0]?.id) === s.id)
+                .map((r) => (
+                  <RequestBlock key={r.id} r={r} top={yOf(minutesOfDay(r.startAt))} anyone={!r.staffId} onOpen={() => onRequest?.(r.id)} />
+                ))}
+              {hover?.staffId === s.id && (
+                <div
+                  className="pointer-events-none absolute inset-x-1 z-[1] flex items-center rounded-md border border-jade/60 bg-jade-mist/80 px-2 text-[11px] font-bold text-jade-deep"
+                  style={{ top: yOf(hover.min) + 1, height: (SNAP / 60) * HOUR - 2 }}
+                >
+                  <Plus className="mr-1 size-3" />
+                  {dot(fromMin(hover.min))} {s.name}
+                </div>
+              )}
               {(byStaff.get(s.id) ?? []).map((p) => (
                 <BookingBlock
                   key={p.b.id}
@@ -444,7 +571,8 @@ function Timeline({
                 />
               ))}
             </div>
-          ))}
+            );
+          })}
 
           {showNow && (
             <div className="pointer-events-none absolute right-0 z-[5] h-0 border-t-2 border-jade-deep" style={{ top: nowTop, left: gutter }}>
@@ -454,6 +582,23 @@ function Timeline({
         </div>
       </div>
     </div>
+  );
+}
+
+/** A patient's portal request, not yet confirmed: dashed, so it reads as tentative. */
+function RequestBlock({ r, top, anyone, onOpen }: { r: Row<BookingRequest>; top: number; anyone: boolean; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="absolute right-[3px] left-[3px] z-[2] overflow-hidden rounded-lg border-2 border-dashed border-jade bg-surface/90 px-2 py-1 text-left text-jade-deep hover:shadow-[var(--shadow-lift)]"
+      style={{ top: top + 1, height: Math.max((r.durationMin / 60) * HOUR - 3, 26) }}
+    >
+      <span className="flex items-center gap-1 text-[12px] font-bold">
+        <Globe className="size-3 shrink-0" />
+        <span className="truncate">{r.personName}</span>
+      </span>
+      <span className="block truncate text-[11px] opacity-80">Permintaan online{anyone ? ", terapis bebas" : ""}</span>
+    </button>
   );
 }
 
@@ -491,7 +636,7 @@ function BookingBlock({
         height,
         left: `calc(${lane * width}% + 3px)`,
         width: `calc(${width}% - 6px)`,
-        background: inSession ? c.dot : c.bg,
+        background: inSession ? c.solid : c.bg,
         borderLeftColor: inSession ? c.fg : c.dot,
         color: inSession ? "#fff" : c.fg,
         opacity: paid ? 0.72 : 1,
@@ -507,8 +652,8 @@ function BookingBlock({
       </span>
       {!short && (
         <>
-          <span className="mt-0.5 block truncate text-xs leading-tight opacity-85">{b.serviceName}</span>
-          <span className="tnum mt-0.5 block text-[11px] leading-tight opacity-75">
+          <span className="mt-0.5 block truncate text-xs leading-tight opacity-90">{b.serviceName}</span>
+          <span className="tnum mt-0.5 block text-[11px] leading-tight opacity-90">
             {time(b.startAt)}–{time(b.startAt + b.durationMin * 60_000)}
           </span>
         </>

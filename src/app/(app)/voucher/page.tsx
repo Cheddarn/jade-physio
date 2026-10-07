@@ -1,5 +1,6 @@
 "use client";
 
+import { Pager, usePager } from "@/components/Pager";
 import { useMemo, useState } from "react";
 import { Search, Ticket } from "lucide-react";
 import { Empty, Input, PageHeader, Segmented, Spinner } from "@/components/ui";
@@ -35,6 +36,8 @@ export default function VoucherPage() {
       })
       .filter((v) => !t || v.customerName.toLowerCase().includes(t) || v.code.toLowerCase().includes(t) || v.name.toLowerCase().includes(t));
   }, [all, filter, q]);
+
+  const pager = usePager(list, "voucher", 25);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -73,11 +76,14 @@ export default function VoucherPage() {
             body="Voucher dibuat otomatis saat paket sesi dijual di checkout, atau ditambahkan manual dari halaman pelanggan."
           />
         ) : (
-          <div className="mt-4 grid gap-3 pb-10 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((v) => (
-              <VoucherCard key={v.id} v={v} onClick={() => setOpenId(v.id)} />
-            ))}
-          </div>
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pager.shown.map((v) => (
+                <VoucherCard key={v.id} v={v} onClick={() => setOpenId(v.id)} />
+              ))}
+            </div>
+            <Pager pager={pager} label="voucher" className="mt-3 pb-10" />
+          </>
         )}
       </div>
       {openId && <VoucherDetail voucher={all.find((v) => v.id === openId) ?? null} onClose={() => setOpenId(null)} />}

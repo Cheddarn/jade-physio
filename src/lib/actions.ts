@@ -1,9 +1,12 @@
 import { store, type Row } from "./store";
 import { dateKey, remaining, voucherCode } from "./format";
+import { discountAmount } from "./discounts";
 import type {
   Booking,
   BookingStatus,
   Customer,
+  Discount,
+  Receipt,
   Package,
   PaymentMethod,
   Redemption,
@@ -44,6 +47,9 @@ export interface BookingInput {
   customer: Row<Customer>;
   staff: Row<Staff>;
   service: Row<Service>;
+  /** A package to sell with this session, or the patient's package to use. */
+  pkg?: Row<Package> | null;
+  voucher?: Row<Voucher> | null;
   startAt: number;
   durationMin: number;
   notes?: string;
@@ -65,6 +71,9 @@ export async function createBooking(input: BookingInput) {
     dateKey: dateKey(input.startAt),
     status: input.status ?? "booked",
     notes: input.notes?.trim() || undefined,
+    packageId: input.pkg?.id ?? null,
+    packageName: input.pkg?.name ?? null,
+    voucherId: input.voucher?.id ?? null,
     createdAt: Date.now(),
   };
   return store.add("bookings", data);
@@ -84,6 +93,9 @@ export async function updateBooking(id: string, input: BookingInput) {
     durationMin: input.durationMin,
     dateKey: dateKey(input.startAt),
     notes: input.notes?.trim() ?? "",
+    packageId: input.pkg?.id ?? null,
+    packageName: input.pkg?.name ?? null,
+    voucherId: input.voucher?.id ?? null,
   });
 }
 
@@ -152,13 +164,21 @@ export interface CartLine {
   bookingId?: string;
   /** existing voucher id, or "new:<lineKey>" for a package bought in this same checkout */
   voucherId?: string;
+  /** Package lines: the staff member who sold it. */
+  soldBy?: string;
+  soldByName?: string;
+  /** A discount the manager set up, applied to this line. */
+  discountId?: string;
 }
 
 export interface CheckoutInput {
   customer: Row<Customer>;
   bookingId?: string;
   lines: CartLine[];
-  discount: number;
+  /** Whole-bill discount: a preset, plus a manual amount (managers only). */
+  billDiscountId?: string;
+  manualDiscount?: number;
+  discounts: Record<string, Row<Discount>>;
   paymentMethod: PaymentMethod | null;
   paymentRef?: string;
   packages: Record<string, Row<Package>>;
@@ -166,18 +186,86 @@ export interface CheckoutInput {
   createdByName?: string;
 }
 
-export function cartTotals(lines: CartLine[], discount: number) {
+/**
+ * Line discounts come off each line first (not on voucher-paid lines), then the
+ * bill discount comes off what is left to pay.
+ */
+export function cartTotals(
+  lines: CartLine[],
+  bill: { discountId?: string; manual?: number } = {},
+  discounts: Record<string, Discount> = {},
+) {
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
   const covered = lines.reduce((s, l) => s + (l.voucherId ? l.unitPrice * l.qty : 0), 0);
-  const payable = subtotal - covered;
-  const disc = Math.max(0, Math.min(discount || 0, payable));
-  return { subtotal, covered, discount: disc, total: payable - disc };
+  const lineDiscounts: Record<string, number> = {};
+  for (const l of lines)
+    lineDiscounts[l.key] = l.voucherId || !l.discountId ? 0 : discountAmount(discounts[l.discountId], l.unitPrice * l.qty);
+  const lineDiscount = Object.values(lineDiscounts).reduce((a, b) => a + b, 0);
+  const payable = subtotal - covered - lineDiscount;
+  const preset = bill.discountId ? discountAmount(discounts[bill.discountId], payable) : 0;
+  const billDiscount = Math.max(0, Math.min(payable, preset + Math.max(0, bill.manual || 0)));
+  return {
+    subtotal,
+    covered,
+    lineDiscounts,
+    lineDiscount,
+    billDiscount,
+    discount: lineDiscount + billDiscount,
+    total: payable - billDiscount,
+  };
+}
+
+/** Unguessable id for the public receipt link. */
+export function receiptToken() {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+  let s = "";
+  const rnd = new Uint32Array(20);
+  crypto.getRandomValues(rnd);
+  for (const n of rnd) s += chars[n % chars.length];
+  return s;
+}
+
+export function receiptFrom(saleId: string, sale: Sale): Receipt {
+  return {
+    saleId,
+    invoiceNo: sale.invoiceNo,
+    customerName: sale.customerName,
+    items: sale.items.map((i) => ({
+      name: i.name,
+      qty: i.qty,
+      unitPrice: i.unitPrice,
+      amount: i.amount,
+      discount: i.discount ?? 0,
+      discountName: i.discountName ?? "",
+      voucher: !!i.voucherId,
+      staffName: i.staffName ?? "",
+      kind: i.kind,
+    })),
+    subtotal: sale.subtotal,
+    voucherCovered: sale.voucherCovered,
+    discount: sale.discount,
+    billDiscountName: sale.billDiscountName ?? "",
+    total: sale.total,
+    paymentMethod: sale.paymentMethod,
+    status: sale.status,
+    createdAt: sale.createdAt,
+  };
+}
+
+/** For invoices made before receipts existed: create the public link on demand. */
+export async function ensureReceipt(saleId: string, sale: Sale) {
+  if (sale.receiptToken) return sale.receiptToken;
+  const token = receiptToken();
+  await store.set("receipts", token, receiptFrom(saleId, sale));
+  await store.update("sales", saleId, { receiptToken: token });
+  return token;
 }
 
 export async function checkout(input: CheckoutInput) {
   const now = Date.now();
   const year = new Date(now).getFullYear();
-  const totals = cartTotals(input.lines, input.discount);
+  const totals = cartTotals(input.lines, { discountId: input.billDiscountId, manual: input.manualDiscount }, input.discounts);
+  const token = receiptToken();
   if (totals.total > 0 && !input.paymentMethod) throw new Error("Pilih metode pembayaran.");
 
   const saleId = store.newId("sales");
@@ -235,19 +323,24 @@ export async function checkout(input: CheckoutInput) {
       let voucherCode: string | undefined;
       if (voucherId?.startsWith("new:")) voucherId = newVoucherIds[voucherId.slice(4)]?.[0];
       if (voucherId && vouchers.has(voucherId)) voucherCode = vouchers.get(voucherId)!.code;
+      const disc = totals.lineDiscounts[l.key] ?? 0;
       return {
         kind: l.kind,
         refId: l.refId,
         name: l.name,
         qty: l.qty,
         unitPrice: l.unitPrice,
-        amount: l.voucherId ? 0 : l.unitPrice * l.qty,
+        amount: l.voucherId ? 0 : l.unitPrice * l.qty - disc,
+        discount: disc || undefined,
+        discountName: disc && l.discountId ? input.discounts[l.discountId]?.name : undefined,
         staffId: l.staffId,
         staffName: l.staffName,
         bookingId: l.bookingId,
         voucherId,
         voucherCode,
         issuedVoucherIds: l.kind === "package" ? newVoucherIds[l.key] : undefined,
+        soldBy: l.kind === "package" ? l.soldBy || input.createdBy : undefined,
+        soldByName: l.kind === "package" ? l.soldByName || input.createdByName : undefined,
       };
     });
 
@@ -269,7 +362,8 @@ export async function checkout(input: CheckoutInput) {
           serviceIds: pkg.serviceIds,
           totalSessions: pkg.sessions,
           usedSessions: used.length,
-          pricePaid: l.unitPrice,
+          // What the patient actually paid per package, after its discount.
+          pricePaid: Math.round((l.unitPrice * l.qty - (totals.lineDiscounts[l.key] ?? 0)) / l.qty),
           purchasedAt: now,
           expiresAt: pkg.validityDays > 0 ? now + pkg.validityDays * 86_400_000 : null,
           status: used.length >= pkg.sessions ? "used" : "active",
@@ -277,6 +371,9 @@ export async function checkout(input: CheckoutInput) {
           saleId,
           invoiceNo,
           redemptions: used,
+          soldBy: l.soldBy || input.createdBy,
+          soldByName: l.soldByName || input.createdByName || null,
+          remindedAt: null,
         };
         tx.set("vouchers", vid, v);
       }
@@ -313,6 +410,13 @@ export async function checkout(input: CheckoutInput) {
       subtotal: totals.subtotal,
       voucherCovered: totals.covered,
       discount: totals.discount,
+      lineDiscount: totals.lineDiscount,
+      billDiscount: totals.billDiscount,
+      billDiscountName:
+        totals.billDiscount > 0
+          ? [input.billDiscountId ? input.discounts[input.billDiscountId]?.name : "", input.manualDiscount ? "Diskon manual" : ""].filter(Boolean).join(" + ")
+          : undefined,
+      receiptToken: token,
       total: totals.total,
       paymentMethod: totals.total > 0 ? input.paymentMethod! : totals.covered > 0 ? "voucher" : input.paymentMethod ?? "qris",
       paymentRef: input.paymentRef?.trim() || undefined,
@@ -323,10 +427,11 @@ export async function checkout(input: CheckoutInput) {
       createdByName: input.createdByName,
     };
     tx.set("sales", saleId, sale);
+    tx.set("receipts", token, receiptFrom(saleId, sale));
 
     for (const id of bookingIds) tx.update("bookings", id, { status: "paid", saleId, invoiceNo });
 
-    return { saleId, invoiceNo };
+    return { saleId, invoiceNo, receiptToken: token };
   });
 }
 
@@ -369,6 +474,8 @@ export async function voidSale(saleId: string, reason: string) {
     for (const id of bookingIds) tx.update("bookings", id, { status: "booked", saleId: null, invoiceNo: null });
 
     tx.update("sales", saleId, { status: "void", voidReason: reason.trim(), voidedAt: Date.now() });
+    // The patient's online receipt shows it was cancelled.
+    if (sale.receiptToken) tx.update("receipts", sale.receiptToken, { status: "void" });
   });
 }
 

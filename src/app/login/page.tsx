@@ -6,6 +6,7 @@ import { Logo } from "@/components/AppShell";
 import { Beads } from "@/components/Beads";
 import { Button, Field, Input, Segmented } from "@/components/ui";
 import { authErrorMessage, useAuth } from "@/lib/auth";
+import { HOME, homeFor } from "@/lib/roles";
 
 export default function LoginPage() {
   const { state, signIn, signUp, isFirstRun } = useAuth();
@@ -13,14 +14,17 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"masuk" | "daftar">("masuk");
   const [firstRun, setFirstRun] = useState(false);
   const [name, setName] = useState("");
+  const [who, setWho] = useState<"pasien" | "staf">("pasien");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (state.status === "ready" || state.status === "no_access") router.replace("/kalender");
-  }, [state.status, router]);
+    if (state.status === "ready") router.replace(homeFor(state.user.role));
+    else if (state.status === "no_access") router.replace(HOME);
+  }, [state, router]);
 
   useEffect(() => {
     isFirstRun().then((f) => {
@@ -36,7 +40,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       if (mode === "masuk") await signIn(email, password);
-      else await signUp(name, email, password);
+      else await signUp(name, email, password, !firstRun && who === "pasien" ? { phone } : undefined);
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
@@ -75,8 +79,10 @@ export default function LoginPage() {
           {firstRun
             ? "Akun pertama otomatis menjadi admin. Admin bisa menambahkan email lain setelahnya."
             : mode === "masuk"
-              ? "Untuk admin, staf kasir, dan terapis Jade Physio."
-              : "Pakai email yang sudah ditambahkan admin (sebagai admin, kasir, atau terapis)."}
+              ? "Untuk pasien dan staf Jade Physio."
+              : who === "pasien"
+                ? "Buat akun untuk booking sendiri, untuk Anda dan keluarga."
+                : "Staf: pakai email yang sudah ditambahkan admin."}
         </p>
 
         {!firstRun && (
@@ -95,9 +101,27 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
+          {mode === "daftar" && !firstRun && (
+            <Field label="Daftar sebagai">
+              <Segmented
+                className="w-full"
+                value={who}
+                onChange={setWho}
+                options={[
+                  { value: "pasien", label: "Pasien" },
+                  { value: "staf", label: "Staf klinik" },
+                ]}
+              />
+            </Field>
+          )}
           {mode === "daftar" && (
             <Field label="Nama" htmlFor="name">
               <Input id="name" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+          )}
+          {mode === "daftar" && !firstRun && who === "pasien" && (
+            <Field label="No. WhatsApp" htmlFor="phone">
+              <Input id="phone" type="tel" autoComplete="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0812 3456 7890" />
             </Field>
           )}
           <Field label="Email" htmlFor="email">

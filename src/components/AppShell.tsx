@@ -3,33 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import {
-  CalendarDays,
-  ChartColumn,
-  Ellipsis,
-  LayoutGrid,
-  LogOut,
-  ReceiptText,
-  ShoppingBag,
-  Ticket,
-  UserCog,
-  Users,
-} from "lucide-react";
+import { Ellipsis, LogOut, ShoppingBag } from "lucide-react";
 import { cx } from "./ui";
 import { useAuth, useCan, useUser } from "@/lib/auth";
-import { ROLES, ROLE_LABEL, type Cap, type Role } from "@/lib/roles";
+import { ROLES, ROLE_LABEL, ROLE_SHORT, type Role } from "@/lib/roles";
+import { NAV, NAV_GROUPS } from "@/lib/nav";
+import { CommandPalette, SearchButton } from "./CommandPalette";
+import { FlowAlertsProvider, useFlowAlerts } from "./FlowAlerts";
+import { ClockCard } from "./Attendance";
 import { DEMO_MODE } from "@/lib/firebase";
 import { BUSINESS } from "@/lib/format";
 
-export const NAV: { href: string; label: string; icon: typeof CalendarDays; cap?: Cap }[] = [
-  { href: "/kalender", label: "Kalender", icon: CalendarDays },
-  { href: "/pelanggan", label: "Pelanggan", icon: Users },
-  { href: "/voucher", label: "Voucher", icon: Ticket, cap: "vouchers.view" },
-  { href: "/faktur", label: "Faktur", icon: ReceiptText, cap: "sales.view" },
-  { href: "/laporan", label: "Laporan", icon: ChartColumn, cap: "reports" },
-  { href: "/katalog", label: "Katalog", icon: LayoutGrid, cap: "catalog" },
-  { href: "/tim", label: "Terapis & akses", icon: UserCog, cap: "team" },
-];
+export { NAV };
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -44,11 +29,34 @@ export function Logo({ className }: { className?: string }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <FlowAlertsProvider>
+      <Shell>{children}</Shell>
+    </FlowAlertsProvider>
+  );
+}
+
+function TaskCount({ href, className }: { href: string; className?: string }) {
+  const { badges } = useFlowAlerts();
+  const n = badges[href] ?? 0;
+  if (!n) return null;
+  return (
+    <span
+      className={cx("tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-white", className)}
+      aria-label={`${n} perlu ditindaklanjuti`}
+    >
+      {n}
+    </span>
+  );
+}
+
+function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const user = useUser();
   const can = useCan();
   const { signOut } = useAuth();
   const nav = NAV.filter((n) => !n.cap || can(n.cap));
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: nav.filter((n) => n.group === g.id) })).filter((g) => g.items.length);
   const mobileNav = nav.slice(0, 4);
   const active = (href: string) => path === href || path.startsWith(href + "/");
   const moreActive = !mobileNav.some((n) => active(n.href)) && !active("/checkout");
@@ -72,23 +80,36 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
         )}
-        <nav className="flex flex-1 flex-col gap-0.5 px-3">
-          {nav.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cx(
-                "flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm font-semibold transition-colors",
-                active(href) ? "bg-jade-mist text-jade-deep" : "text-ink-2 hover:bg-line-soft hover:text-ink",
-              )}
-            >
-              <Icon className="size-[18px]" strokeWidth={active(href) ? 2.4 : 2} />
-              {label}
-            </Link>
+        {user.role !== "patient" && (
+          <div className="px-3 pb-3">
+            <SearchButton />
+          </div>
+        )}
+        <nav aria-label="Menu utama" className="scroll-thin flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2">
+          {groups.map((g) => (
+            <div key={g.id} className="flex flex-col gap-0.5 pb-2">
+              {groups.length > 1 && <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-wide text-muted uppercase">{g.label}</p>}
+              {g.items.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active(href) ? "page" : undefined}
+                  className={cx(
+                    "flex h-9 shrink-0 items-center gap-3 rounded-[10px] px-3 text-sm font-semibold transition-colors",
+                    active(href) ? "bg-jade-mist text-jade-deep" : "text-ink-2 hover:bg-line-soft hover:text-ink",
+                  )}
+                >
+                  <Icon className="size-[18px]" strokeWidth={active(href) ? 2.4 : 2} />
+                  {label}
+                  <TaskCount href={href} className="ml-auto" />
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="border-t border-line-soft p-3">
           {DEMO_MODE && <DemoRoleSwitch className="mb-2" />}
+          <ClockCard compact className="mb-2" />
           <div className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{user.name}</p>
@@ -107,6 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="pb-[calc(72px+var(--safe-bottom))] md:pb-0 print:!pb-0">{children}</main>
+      <CommandPalette />
 
       {/* Mobile tab bar */}
       <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[var(--safe-bottom)] backdrop-blur md:hidden">
@@ -115,15 +137,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               key={href}
               href={href}
+              aria-current={active(href) ? "page" : undefined}
               className={cx(
                 "flex flex-col items-center justify-center gap-1 text-[11px] font-semibold",
                 active(href) ? "text-jade-deep" : "text-muted",
               )}
             >
-              <span className={cx("flex h-7 w-12 items-center justify-center rounded-full", active(href) && "bg-jade-mist")}>
+              <span className={cx("relative flex h-7 w-12 items-center justify-center rounded-full", active(href) && "bg-jade-mist")}>
                 <Icon className="size-5" strokeWidth={active(href) ? 2.4 : 2} />
+                <TaskCount href={href} className="absolute -top-1 -right-0.5" />
               </span>
-              {label}
+              {label.split(" ")[0]}
             </Link>
           ))}
           <Link
@@ -151,18 +175,18 @@ export function DemoRoleSwitch({ className }: { className?: string }) {
   return (
     <div className={cx("rounded-lg bg-amber-mist px-3 py-2", className)}>
       <p className="text-xs font-semibold text-amber">Mode demo: lihat sebagai</p>
-      <div className="mt-1.5 flex gap-1">
+      <div className="mt-1.5 grid grid-cols-3 gap-1">
         {ROLES.map((r: Role) => (
           <button
             key={r}
             onClick={() => setDemoRole(r)}
             aria-pressed={user.role === r}
             className={cx(
-              "h-7 flex-1 rounded-md px-1 text-[11px] font-semibold whitespace-nowrap transition-colors",
+              "h-7 rounded-md px-1 text-[11px] font-semibold whitespace-nowrap transition-colors",
               user.role === r ? "bg-surface text-ink shadow-sm" : "text-amber hover:bg-surface/60",
             )}
           >
-            {r === "staff" ? "Kasir" : ROLE_LABEL[r]}
+            {ROLE_SHORT[r]}
           </button>
         ))}
       </div>

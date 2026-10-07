@@ -195,10 +195,10 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
       onClick={() => onChange(!checked)}
       className="flex items-center gap-3 text-sm font-medium text-ink"
     >
-      <span className={cx("relative h-6 w-10 rounded-full transition-colors", checked ? "bg-jade" : "bg-line")}>
+      <span className={cx("relative h-6 w-10 shrink-0 rounded-full transition-colors", checked ? "bg-jade" : "bg-line")}>
         <span
           className={cx(
-            "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
+            "absolute left-0 top-0.5 size-5 rounded-full bg-white shadow transition-transform",
             checked ? "translate-x-[18px]" : "translate-x-0.5",
           )}
         />
@@ -222,16 +222,28 @@ export function Segmented<T extends string>({
   className?: string;
   size?: "sm" | "md";
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Arrow keys move between options, like native tabs.
+  function onKeyDown(e: React.KeyboardEvent) {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const i = (options.findIndex((o) => o.value === value) + step + options.length) % options.length;
+    onChange(options[i].value);
+    (ref.current?.children[i] as HTMLElement | undefined)?.focus();
+  }
   return (
-    <div role="tablist" className={cx("inline-flex rounded-[10px] bg-line-soft p-1", className)}>
+    <div ref={ref} role="tablist" onKeyDown={onKeyDown} className={cx("no-scrollbar inline-flex max-w-full overflow-x-auto rounded-[10px] bg-line-soft p-1", className)}>
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           role="tab"
           aria-selected={value === o.value}
+          tabIndex={value === o.value ? 0 : -1}
           onClick={() => onChange(o.value)}
           className={cx(
-            "flex-1 whitespace-nowrap rounded-[7px] px-3 font-semibold transition-colors",
+            "flex-1 whitespace-nowrap rounded-[7px] px-2.5 font-semibold transition-colors md:px-3",
             size === "sm" ? "h-7 text-[13px]" : "h-8 text-[13px] md:text-sm",
             value === o.value ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink",
           )}
@@ -243,7 +255,48 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Phone-only floating action button. Shrinks to its icon while scrolling down so it covers less. */
+export function Fab({ label, text, icon, onClick }: { label: string; text?: string; icon: ReactNode; onClick: () => void }) {
+  const [mini, setMini] = useState(false);
+  useEffect(() => {
+    const last = new WeakMap<Element, number>();
+    const on = (e: Event) => {
+      const el = e.target === document ? document.scrollingElement : e.target;
+      if (!(el instanceof Element)) return;
+      const y = el.scrollTop;
+      const prev = last.get(el) ?? 0;
+      last.set(el, y);
+      if (Math.abs(y - prev) >= 4) setMini(y > 80 && y > prev);
+    };
+    document.addEventListener("scroll", on, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", on, { capture: true });
+  }, []);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cx(
+        "fixed right-4 bottom-[calc(84px+var(--safe-bottom))] z-20 flex h-14 items-center justify-center gap-2 rounded-2xl bg-jade font-semibold text-white shadow-[var(--shadow-lift)] transition-[width,padding] duration-200 active:bg-jade-deep md:hidden",
+        mini ? "w-14" : "px-5",
+      )}
+    >
+      {icon}
+      {!mini && <span>{text ?? label}</span>}
+    </button>
+  );
+}
+
 /* ---------------- Surfaces ---------------- */
+
+/** Sideways scroller for wide tables. Focusable, so keyboard users can scroll it too. */
+export function ScrollX({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <div role="region" aria-label={label} tabIndex={0} className={cx("scroll-thin overflow-x-auto focus-visible:outline-offset-[-2px]", className)}>
+      {children}
+    </div>
+  );
+}
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cx("rounded-xl border border-line bg-surface", className)}>{children}</div>;
@@ -339,6 +392,8 @@ export function Sheet({
   children,
   footer,
   wide,
+  center,
+  subheader,
 }: {
   open: boolean;
   onClose: () => void;
@@ -346,6 +401,10 @@ export function Sheet({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Wider screens: a dialog in the middle of the screen instead of a side panel. */
+  center?: boolean;
+  /** Fixed strip under the title that does not scroll (e.g. form steps). */
+  subheader?: ReactNode;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -367,7 +426,7 @@ export function Sheet({
 
   if (!open || !mounted) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-stretch md:justify-end">
+    <div className={cx("fixed inset-0 z-50 flex items-end justify-center", center ? "md:items-center md:p-6" : "md:items-stretch md:justify-end")}>
       <div className="anim-fade absolute inset-0 bg-ink/35" onClick={onClose} />
       <div
         ref={panel}
@@ -376,8 +435,10 @@ export function Sheet({
         aria-modal="true"
         aria-labelledby={titleId}
         className={cx(
-          "anim-sheet-up md:anim-sheet-left relative flex max-h-[92dvh] w-full flex-col rounded-t-[var(--radius-sheet)] bg-surface shadow-[var(--shadow-sheet)] outline-none md:max-h-none md:rounded-none md:rounded-l-[var(--radius-sheet)]",
-          wide ? "md:w-[560px]" : "md:w-[460px]",
+          "anim-sheet-up relative flex max-h-[92dvh] w-full flex-col rounded-t-[var(--radius-sheet)] bg-surface shadow-[var(--shadow-sheet)] outline-none",
+          center
+            ? "md:anim-pop md:max-h-[88dvh] md:w-[620px] md:rounded-[var(--radius-sheet)]"
+            : cx("md:anim-sheet-left md:max-h-none md:rounded-none md:rounded-l-[var(--radius-sheet)]", wide ? "md:w-[560px]" : "md:w-[460px]"),
         )}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line md:hidden" />
@@ -389,6 +450,7 @@ export function Sheet({
             <X className="size-5" />
           </IconButton>
         </div>
+        {subheader && <div className="border-b border-line-soft px-5 py-3 md:px-6">{subheader}</div>}
         <div className="scroll-thin flex-1 overflow-y-auto px-5 py-5 md:px-6">{children}</div>
         {footer && (
           <div className="border-t border-line-soft px-5 pt-3 pb-[calc(12px+var(--safe-bottom))] md:px-6 md:pb-4">{footer}</div>

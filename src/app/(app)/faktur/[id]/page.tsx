@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Ban, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, Ban, Copy, ExternalLink, Link2, MessageCircle, Printer } from "lucide-react";
 import { Logo } from "@/components/AppShell";
-import { Badge, Button, Confirm, Empty, Spinner, Textarea, cx, errorText, useToast } from "@/components/ui";
+import { Badge, Button, Confirm, Empty, ScrollX, Spinner, Textarea, cx, errorText, useToast } from "@/components/ui";
 import { waLink } from "@/components/CustomerPicker";
 import { useDoc } from "@/lib/hooks";
 import { useCan } from "@/lib/auth";
-import { voidSale } from "@/lib/actions";
+import { ensureReceipt, voidSale } from "@/lib/actions";
 import { BUSINESS, PAYMENT_LABEL, dateTime, longDate, rupiah, time } from "@/lib/format";
 import type { Sale } from "@/lib/types";
 
@@ -21,6 +21,7 @@ export default function FakturDetailPage() {
   const [voiding, setVoiding] = useState(false);
   const [reason, setReason] = useState("");
   const can = useCan();
+  const [making, setMaking] = useState(false);
 
   if (loading) return <Spinner />;
   if (!s)
@@ -37,16 +38,35 @@ export default function FakturDetailPage() {
 
   const isVoid = s.status === "void";
   const wa = waLink(s.customerPhone);
+  const receiptUrl = s.receiptToken && typeof window !== "undefined" ? `${window.location.origin}/resi/${s.receiptToken}` : "";
+  async function copyReceipt() {
+    let url = receiptUrl;
+    try {
+      if (!url) {
+        setMaking(true);
+        url = `${window.location.origin}/resi/${await ensureReceipt(s!.id, s!)}`;
+      }
+      await navigator.clipboard.writeText(url);
+      toast("Link resi disalin");
+    } catch (e) {
+      if (url) window.prompt("Salin link resi:", url);
+      else toast(errorText(e), "error");
+    } finally {
+      setMaking(false);
+    }
+  }
   const waText = [
     `*${BUSINESS.name}*`,
     `Faktur ${s.invoiceNo}`,
     dateTime(s.createdAt),
     "",
-    ...s.items.map((i) => `${i.qty}x ${i.name}${i.voucherId ? " (voucher)" : ""}: ${rupiah(i.amount)}`),
+    // Line amounts are already after their own discount; only the bill discount is listed separately.
+    ...s.items.map((i) => `${i.qty}x ${i.name}${i.voucherId ? " (voucher)" : ""}${i.discount ? ` (diskon ${i.discountName})` : ""}: ${rupiah(i.amount)}`),
     "",
     s.voucherCovered ? `Dibayar voucher: -${rupiah(s.voucherCovered)}` : "",
-    s.discount ? `Diskon: -${rupiah(s.discount)}` : "",
+    s.discount - (s.lineDiscount ?? 0) > 0 ? `Diskon${s.billDiscountName ? ` ${s.billDiscountName}` : ""}: -${rupiah(s.discount - (s.lineDiscount ?? 0))}` : "",
     `*Total: ${rupiah(s.total)}* (${PAYMENT_LABEL[s.paymentMethod]})`,
+    receiptUrl ? `\nResi online: ${receiptUrl}` : "",
     "",
     "Terima kasih, semoga lekas pulih!",
   ]
@@ -65,6 +85,16 @@ export default function FakturDetailPage() {
             <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer">
               <Button size="sm" variant="secondary" icon={<MessageCircle className="size-3.5" />}>
                 Kirim WhatsApp
+              </Button>
+            </a>
+          )}
+          <Button size="sm" variant="secondary" loading={making} icon={receiptUrl ? <Copy className="size-3.5" /> : <Link2 className="size-3.5" />} onClick={copyReceipt}>
+            {receiptUrl ? "Salin link resi" : "Buat link resi"}
+          </Button>
+          {receiptUrl && (
+            <a href={`/resi/${s.receiptToken}`} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="secondary" icon={<ExternalLink className="size-3.5" />}>
+                Lihat resi
               </Button>
             </a>
           )}
@@ -120,7 +150,7 @@ export default function FakturDetailPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <ScrollX label="Rincian item">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-line text-left text-[13px] text-muted">
@@ -144,6 +174,11 @@ export default function FakturDetailPage() {
                     {i.kind === "package" && (
                       <p className="mt-0.5 text-[13px] font-medium text-jade-deep">Voucher sesi dibuat untuk pelanggan</p>
                     )}
+                    {!!i.discount && (
+                      <p className="mt-0.5 text-[13px] font-medium text-jade-deep">
+                        Diskon {i.discountName}: −{rupiah(i.discount)}
+                      </p>
+                    )}
                   </td>
                   <td className="tnum py-3 px-3 text-center">{i.qty}</td>
                   <td className="tnum py-3 pl-3 text-right font-medium">
@@ -151,6 +186,11 @@ export default function FakturDetailPage() {
                       <>
                         <span className="block text-muted line-through">{rupiah(i.unitPrice * i.qty)}</span>
                         {rupiah(0)}
+                      </>
+                    ) : i.discount ? (
+                      <>
+                        <span className="block text-muted line-through">{rupiah(i.unitPrice * i.qty)}</span>
+                        {rupiah(i.amount)}
                       </>
                     ) : (
                       rupiah(i.amount)
@@ -160,7 +200,7 @@ export default function FakturDetailPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollX>
 
         <dl className="ml-auto mt-4 flex max-w-72 flex-col gap-2 text-sm">
           <div className="flex justify-between">
@@ -173,10 +213,16 @@ export default function FakturDetailPage() {
               <dd className="tnum">−{rupiah(s.voucherCovered)}</dd>
             </div>
           )}
-          {s.discount > 0 && (
+          {!!s.lineDiscount && (
             <div className="flex justify-between">
-              <dt className="text-muted">Diskon</dt>
-              <dd className="tnum">−{rupiah(s.discount)}</dd>
+              <dt className="text-muted">Diskon item</dt>
+              <dd className="tnum">−{rupiah(s.lineDiscount)}</dd>
+            </div>
+          )}
+          {s.discount - (s.lineDiscount ?? 0) > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Diskon{s.billDiscountName ? ` (${s.billDiscountName})` : ""}</dt>
+              <dd className="tnum">−{rupiah(s.discount - (s.lineDiscount ?? 0))}</dd>
             </div>
           )}
           <div className="mt-1 flex items-baseline justify-between border-t border-line pt-3">

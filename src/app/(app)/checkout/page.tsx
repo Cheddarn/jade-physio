@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  BadgePercent,
   CheckCircle2,
+  Copy,
+  ExternalLink,
+  MessageCircle,
   CreditCard,
   Landmark,
   Minus,
@@ -30,11 +34,13 @@ import {
   useToast,
 } from "@/components/ui";
 import { Beads, VoucherCard } from "@/components/Beads";
-import { CustomerPicker } from "@/components/CustomerPicker";
+import { CustomerPicker, waLink } from "@/components/CustomerPicker";
 import { useCollection, useCustomers, useDoc, usePackages, useServices, useStaff } from "@/lib/hooks";
 import { cartTotals, checkout, voucherCovers, voucherState, type CartLine } from "@/lib/actions";
-import { useUser } from "@/lib/auth";
-import { PAYMENT_LABEL, duration, remaining, rupiah, shortDate, staffColor, time } from "@/lib/format";
+import { useCan, useUser } from "@/lib/auth";
+import { discountAmount, discountValue, fits, useDiscounts } from "@/lib/discounts";
+import { useTeam } from "@/lib/settings";
+import { BUSINESS, PAYMENT_LABEL, duration, remaining, rupiah, shortDate, staffColor, time, validityText } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Booking, Customer, Package, PaymentMethod, Voucher } from "@/lib/types";
 
@@ -69,16 +75,23 @@ function Checkout() {
   const { services } = useServices(true);
   const { packages } = usePackages(true);
   const { staff } = useStaff();
+  const { team } = useTeam();
+  // Anyone at the clinic can be credited with a package sale; the cashier by default.
+  const sellers = team.filter((t) => t.role !== "cleaning");
 
   const [customer, setCustomer] = useState<Row<Customer> | null>(null);
   const [lines, setLines] = useState<CartLine[]>([]);
-  const [discount, setDiscount] = useState(0);
+  const [billDiscountId, setBillDiscountId] = useState("");
+  const [manualDiscount, setManualDiscount] = useState(0);
+  const can = useCan();
+  const { discounts } = useDiscounts();
+  const discountMap = useMemo(() => Object.fromEntries(discounts.map((d) => [d.id, d])), [discounts]);
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [paymentRef, setPaymentRef] = useState("");
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState<{ saleId: string; invoiceNo: string; total: number; method: string } | null>(null);
+  const [done, setDone] = useState<{ saleId: string; invoiceNo: string; receiptToken: string; total: number; method: string } | null>(null);
   const manual = useRef(new Set<string>());
   const initialised = useRef(false);
 
@@ -87,6 +100,7 @@ function Checkout() {
     if (initialised.current) return;
     if (bookingId) {
       if (bookingLoading || !booking) return;
+      if (booking.packageId && packages.length === 0) return;
       initialised.current = true;
       setCustomer(
         customers.find((c) => c.id === booking.customerId) ?? {
@@ -97,6 +111,9 @@ function Checkout() {
           createdAt: 0,
         },
       );
+      // Package picked when booking: sell it here and pay this session with it.
+      const pkg = booking.status !== "paid" ? packages.find((p) => p.id === booking.packageId) : undefined;
+      const pkgKey = newKey();
       setLines([
         {
           key: newKey(),
@@ -108,7 +125,9 @@ function Checkout() {
           staffId: booking.staffId,
           staffName: booking.staffName,
           bookingId: booking.id,
+          voucherId: pkg ? `new:${pkgKey}` : undefined,
         },
+        ...(pkg ? [{ key: pkgKey, kind: "package" as const, refId: pkg.id, name: pkg.name, unitPrice: pkg.price, qty: 1, soldBy: user.email, soldByName: user.name }] : []),
       ]);
       return;
     }
@@ -117,7 +136,7 @@ function Checkout() {
     initialised.current = true;
     if (customerParam) setCustomer(customers.find((c) => c.id === customerParam) ?? null);
     const pkg = packages.find((p) => p.id === packageParam);
-    if (pkg) setLines([{ key: newKey(), kind: "package", refId: pkg.id, name: pkg.name, unitPrice: pkg.price, qty: 1 }]);
+    if (pkg) setLines([{ key: newKey(), kind: "package", refId: pkg.id, name: pkg.name, unitPrice: pkg.price, qty: 1, soldBy: user.email, soldByName: user.name }]);
   }, [bookingId, booking, bookingLoading, customers, packages, customerParam, packageParam]);
 
   const { rows: voucherRows } = useCollection<Voucher>(customer ? "vouchers" : null, [
@@ -166,16 +185,18 @@ function Checkout() {
           changed = true;
         }
         if (!l.voucherId && opts.length) {
-          l.voucherId = opts[0].id;
+          // The package chosen when booking wins over the soonest-expiring one.
+          const wanted = l.bookingId && l.bookingId === booking?.id ? booking.voucherId : null;
+          l.voucherId = (opts.find((o) => o.id === wanted) ?? opts[0]).id;
           changed = true;
         }
       }
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vouchers, lines.length, lines.map((l) => `${l.key}:${l.qty}:${l.refId}`).join(",")]);
+  }, [vouchers, booking?.voucherId, lines.length, lines.map((l) => `${l.key}:${l.qty}:${l.refId}`).join(",")]);
 
-  const totals = cartTotals(lines, discount);
+  const totals = cartTotals(lines, { discountId: billDiscountId, manual: manualDiscount }, discountMap);
   const needsMethod = totals.total > 0;
   const alreadyPaid = booking?.status === "paid";
 
@@ -194,7 +215,9 @@ function Checkout() {
         customer,
         bookingId: booking?.id,
         lines,
-        discount,
+        billDiscountId: billDiscountId || undefined,
+        manualDiscount: can("discounts.manage") ? manualDiscount : 0,
+        discounts: discountMap,
         paymentMethod: needsMethod ? method : null,
         paymentRef,
         packages: pkgById as Record<string, Row<Package>>,
@@ -293,6 +316,7 @@ function Checkout() {
                 const pkg = l.kind === "package" ? pkgById[l.refId] : undefined;
                 const svc = l.kind === "service" ? services.find((s) => s.id === l.refId) : undefined;
                 const covered = !!l.voucherId;
+                const lineDisc = totals.lineDiscounts[l.key] ?? 0;
                 return (
                   <div key={l.key} className="p-4">
                     <div className="flex items-start gap-3">
@@ -305,7 +329,7 @@ function Checkout() {
                         </div>
                         <p className="mt-0.5 text-[13px] text-muted">
                           {svc && duration(svc.durationMin)}
-                          {pkg && `${pkg.sessions} sesi${pkg.validityDays ? `, berlaku ${pkg.validityDays} hari` : ""}`}
+                          {pkg && `${pkg.sessions} sesi${pkg.validityDays ? `, berlaku ${validityText(pkg.validityDays)}` : ""}`}
                           {l.staffName && (
                             <span className="ml-2 inline-flex items-center gap-1">
                               <span
@@ -318,10 +342,11 @@ function Checkout() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className={cx("tnum font-semibold", covered && "text-muted line-through decoration-1")}>
+                        <p className={cx("tnum font-semibold", (covered || lineDisc > 0) && "text-muted line-through decoration-1")}>
                           {rupiah(l.unitPrice * l.qty)}
                         </p>
                         {covered && <p className="tnum text-sm font-bold text-jade-deep">Rp 0</p>}
+                        {!covered && lineDisc > 0 && <p className="tnum text-sm font-bold text-jade-deep">{rupiah(l.unitPrice * l.qty - lineDisc)}</p>}
                       </div>
                       {!l.bookingId && (
                         <button
@@ -345,6 +370,27 @@ function Checkout() {
                             <Plus className="size-4" />
                           </button>
                         </div>
+                        {l.kind === "package" && (
+                          <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+                            Dijual oleh
+                            <Select
+                              aria-label="Dijual oleh"
+                              className="!h-9 max-w-52 text-sm"
+                              value={l.soldBy ?? user.email}
+                              onChange={(e) => {
+                                const t = sellers.find((x) => x.id === e.target.value);
+                                updateLine(l.key, { soldBy: e.target.value, soldByName: t?.name ?? user.name });
+                              }}
+                            >
+                              {!sellers.some((t) => t.id === user.email) && <option value={user.email}>{user.name}</option>}
+                              {sellers.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </Select>
+                          </label>
+                        )}
                         {l.kind === "service" && (
                           <Select
                             aria-label="Terapis"
@@ -363,6 +409,27 @@ function Checkout() {
                             ))}
                           </Select>
                         )}
+                      </div>
+                    )}
+
+                    {!l.voucherId && discounts.some((d) => fits(d, l.kind)) && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <BadgePercent className={cx("size-4 shrink-0", l.discountId ? "text-jade" : "text-muted")} />
+                        <Select
+                          aria-label={`Diskon ${l.name}`}
+                          className={cx("!h-9 max-w-72 text-sm", l.discountId && "!border-jade font-semibold !text-jade-deep")}
+                          value={l.discountId ?? ""}
+                          onChange={(e) => updateLine(l.key, { discountId: e.target.value || undefined })}
+                        >
+                          <option value="">Tanpa diskon</option>
+                          {discounts
+                            .filter((d) => fits(d, l.kind))
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name} ({discountValue(d)}), −{rupiah(discountAmount(d, l.unitPrice * l.qty))}
+                              </option>
+                            ))}
+                        </Select>
                       </div>
                     )}
 
@@ -443,13 +510,35 @@ function Checkout() {
                   <dd className="tnum font-semibold">−{rupiah(totals.covered)}</dd>
                 </div>
               )}
+              {totals.lineDiscount > 0 && (
+                <div className="flex justify-between text-jade-deep">
+                  <dt>Diskon item</dt>
+                  <dd className="tnum font-semibold">−{rupiah(totals.lineDiscount)}</dd>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">Diskon</dt>
-                <dd className="w-36">
-                  <MoneyInput value={discount} onChange={setDiscount} className="[&_input]:!h-9 [&_input]:text-right" />
-                </dd>
+                <dt className="text-muted">Diskon transaksi</dt>
+                <dd className="tnum font-semibold text-jade-deep">{totals.billDiscount ? `−${rupiah(totals.billDiscount)}` : ""}</dd>
               </div>
             </dl>
+            <div className="mt-2.5 flex flex-col gap-2 text-sm">
+              <Select aria-label="Diskon transaksi" className="!h-9 text-sm" value={billDiscountId} onChange={(e) => setBillDiscountId(e.target.value)}>
+                <option value="">Tanpa diskon</option>
+                {discounts
+                  .filter((d) => fits(d, "bill"))
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}, {discountValue(d)}
+                    </option>
+                  ))}
+              </Select>
+              {can("discounts.manage") && (
+                <label className="flex items-center justify-between gap-3 text-[13px] text-muted">
+                  Diskon manual (manajer)
+                  <MoneyInput value={manualDiscount} onChange={setManualDiscount} className="w-36 [&_input]:!h-9 [&_input]:text-right" />
+                </label>
+              )}
+            </div>
             <div className="mt-4 flex items-baseline justify-between border-t border-line-soft pt-4">
               <span className="font-semibold">Total dibayar</span>
               <span className="tnum text-[26px] font-bold tracking-[-0.02em]">{rupiah(totals.total)}</span>
@@ -568,7 +657,7 @@ function AddItemSheet({ open, onClose, onAdd }: { open: boolean; onClose: () => 
               <Beads total={p.sessions} used={0} size={9} className="mt-2" />
               <span className="mt-2 block text-[13px] text-muted">
                 {rupiah(Math.round(p.price / p.sessions))} per sesi
-                {p.validityDays ? `, berlaku ${p.validityDays} hari` : ""}
+                {p.validityDays ? `, berlaku ${validityText(p.validityDays)}` : ""}
               </span>
             </button>
           ))}
@@ -582,9 +671,12 @@ function Done({
   done,
   customer,
 }: {
-  done: { saleId: string; invoiceNo: string; total: number; method: string };
+  done: { saleId: string; invoiceNo: string; receiptToken: string; total: number; method: string };
   customer: Row<Customer>;
 }) {
+  const toast = useToast();
+  const link = typeof window !== "undefined" ? `${window.location.origin}/resi/${done.receiptToken}` : "";
+  const wa = waLink(customer.phone, `Halo ${customer.name.split(" ")[0]}, terima kasih sudah berkunjung ke ${BUSINESS.name}. Resi pembayaran ${done.invoiceNo} (${rupiah(done.total)}) bisa dilihat di:\n${link}`);
   const { rows } = useCollection<Voucher>("vouchers", [["customerId", "==", customer.id]]);
   const touched = (rows ?? []).filter(
     (v) => v.saleId === done.saleId || v.redemptions?.some((r) => r.saleId === done.saleId),
@@ -614,7 +706,41 @@ function Done({
         </div>
       )}
 
-      <div className="mt-8 grid gap-2">
+      <div className="mt-8 rounded-xl border border-line bg-surface p-4">
+        <p className="text-[13px] font-semibold text-ink-2">Resi online untuk pasien</p>
+        <p className="mt-1 truncate font-mono text-[13px] text-jade-deep">{link}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button
+            variant="secondary"
+            icon={<Copy className="size-4" />}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(link);
+                toast("Link resi disalin");
+              } catch {
+                window.prompt("Salin link resi:", link);
+              }
+            }}
+          >
+            Salin link
+          </Button>
+          {wa ? (
+            <a href={wa} target="_blank" rel="noreferrer">
+              <Button block icon={<MessageCircle className="size-4" />}>
+                Kirim WA
+              </Button>
+            </a>
+          ) : (
+            <a href={`/resi/${done.receiptToken}`} target="_blank" rel="noreferrer">
+              <Button block variant="secondary" icon={<ExternalLink className="size-4" />}>
+                Buka resi
+              </Button>
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2">
         <Link href={`/faktur/${done.saleId}`}>
           <Button size="lg" block icon={<ReceiptText className="size-4" />}>
             Lihat &amp; cetak faktur

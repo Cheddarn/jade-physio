@@ -8,8 +8,17 @@ import { ROLES, ROLE_HINT, ROLE_LABEL, type Role } from "@/lib/roles";
 import { shortDate, staffColor } from "@/lib/format";
 import { store, type Row } from "@/lib/store";
 import type { Access, Staff } from "@/lib/types";
+import { saveTeamMember } from "@/lib/settings";
+import { STAFF_ROLES } from "@/lib/roles";
 
-const ROLE_TONE: Record<Role, "jade" | "neutral" | "amber"> = { admin: "jade", staff: "neutral", therapist: "amber" };
+const ROLE_TONE: Record<Role, "jade" | "neutral" | "amber" | "outline"> = {
+  admin: "jade",
+  manager: "jade",
+  staff: "neutral",
+  therapist: "amber",
+  cleaning: "outline",
+  patient: "outline",
+};
 
 export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Access>[] | null }) {
   const toast = useToast();
@@ -17,8 +26,10 @@ export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Acc
   const [editing, setEditing] = useState<Row<Access> | "new" | null>(null);
   const [removing, setRemoving] = useState<Row<Access> | null>(null);
 
-  const order: Record<Role, number> = { admin: 0, staff: 1, therapist: 2 };
-  const list = [...(rows ?? [])].sort((a, b) => order[a.role] - order[b.role] || a.addedAt - b.addedAt);
+  const order: Record<Role, number> = { admin: 0, manager: 1, staff: 2, therapist: 3, cleaning: 4, patient: 5 };
+  // Patients register themselves; they're counted below, not listed with the staff.
+  const list = [...(rows ?? [])].filter((a) => a.role !== "patient").sort((a, b) => order[a.role] - order[b.role] || a.addedAt - b.addedAt);
+  const patients = (rows ?? []).filter((a) => a.role === "patient").length;
 
   return (
     <section className="mt-10">
@@ -79,6 +90,10 @@ export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Acc
         </Card>
       )}
 
+      {patients > 0 && (
+        <p className="mt-2 text-[13px] text-muted">{patients} akun pasien mendaftar sendiri lewat halaman masuk (portal booking).</p>
+      )}
+
       <AccessSheet value={editing} staff={staff} existing={list} onClose={() => setEditing(null)} />
 
       <Confirm
@@ -91,6 +106,7 @@ export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Acc
         onConfirm={async () => {
           try {
             await store.remove("access", removing!.id);
+            await saveTeamMember(removing!.id, { active: false }).catch(() => {});
             toast("Akses dicabut");
             setRemoving(null);
           } catch (e) {
@@ -167,6 +183,9 @@ function AccessSheet({
                 ...(role === "therapist" ? { staffId } : {}),
               };
               await store.set("access", mail, doc);
+              // Keep the team directory (shifts, sellers) in step with logins.
+              if (STAFF_ROLES.includes(role))
+                await saveTeamMember(mail, { name: doc.name || mail, role, staffId: doc.staffId ?? "", active: true });
               toast(isNew ? `${mail} ditambahkan sebagai ${ROLE_LABEL[role]}` : "Akses diperbarui");
               onClose();
             } catch (e) {
@@ -194,7 +213,7 @@ function AccessSheet({
 
         <Field label="Peran">
           <div className="grid gap-2">
-            {ROLES.map((r) => (
+            {ROLES.filter((r) => r !== "patient").map((r) => (
               <button
                 key={r}
                 type="button"

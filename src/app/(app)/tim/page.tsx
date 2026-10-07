@@ -8,7 +8,8 @@ import { useCollection, useStaff } from "@/lib/hooks";
 import { saveStaff } from "@/lib/actions";
 import { STAFF_COLORS, staffColor } from "@/lib/format";
 import type { Row } from "@/lib/store";
-import type { Access, Staff } from "@/lib/types";
+import { GENDER_LABEL } from "@/lib/flow";
+import type { Access, Gender, Staff } from "@/lib/types";
 
 export default function TimPage() {
   const { staff, loading } = useStaff(true);
@@ -50,7 +51,8 @@ export default function TimPage() {
                   <div className="min-w-0 flex-1">
                     <p className={cx("truncate font-semibold", !s.active && "text-muted")}>{s.name}</p>
                     <p className="truncate text-[13px] text-muted">
-                      {loginFor(s.id) ? `Login: ${loginFor(s.id)!.id}` : "Belum punya login"}
+                      {s.gender ? `Spesialis ${GENDER_LABEL[s.gender].toLowerCase()}, ` : "Jenis kelamin belum diisi, "}
+                      {loginFor(s.id) ? `login: ${loginFor(s.id)!.id}` : "belum punya login"}
                     </p>
                   </div>
                   {!s.active && <Badge>Nonaktif</Badge>}
@@ -76,7 +78,7 @@ function StaffForm({ value, nextOrder, onClose }: { value: Row<Staff> | "new" | 
   if (value !== openedFor) {
     setOpenedFor(value);
     if (value === "new") setForm({ name: "", color: Object.keys(STAFF_COLORS)[(nextOrder - 1) % 8], active: true, order: nextOrder });
-    else if (value) setForm({ name: value.name, color: value.color, active: value.active, order: value.order });
+    else if (value) setForm({ name: value.name, color: value.color, active: value.active, order: value.order, gender: value.gender });
   }
   const isNew = value === "new";
 
@@ -111,6 +113,24 @@ function StaffForm({ value, nextOrder, onClose }: { value: Row<Staff> | "new" | 
       <div className="flex flex-col gap-5">
         <Field label="Nama" htmlFor="st-name">
           <Input id="st-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="mis. Ft. Andini" />
+        </Field>
+        <Field label="Jenis kelamin" hint="Front desk memanggil terapis pria atau wanita sesuai kebutuhan pasien.">
+          <div className="grid grid-cols-2 gap-2">
+            {(["L", "P"] as Gender[]).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setForm({ ...form, gender: g })}
+                aria-pressed={form.gender === g}
+                className={cx(
+                  "h-11 rounded-xl border text-sm font-semibold transition-colors",
+                  form.gender === g ? "border-jade bg-jade-mist/50 ring-1 ring-jade" : "border-line hover:border-ink-2/30",
+                )}
+              >
+                {GENDER_LABEL[g]}
+              </button>
+            ))}
+          </div>
         </Field>
         <Field label="Warna di kalender">
           <div className="flex flex-wrap gap-2">

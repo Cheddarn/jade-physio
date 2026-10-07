@@ -1,5 +1,6 @@
 "use client";
 
+import { Pager, usePager } from "@/components/Pager";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ export default function FakturPage() {
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [rows, method, status, q]);
 
+  const pager = usePager(list, "faktur", 25);
   const paid = list.filter((s) => s.status === "paid");
   const total = paid.reduce((s, x) => s + x.total, 0);
 
@@ -41,7 +43,7 @@ export default function FakturPage() {
         subtitle={`${range.from === range.to ? shortDate(range.from) : `${shortDate(range.from)} – ${shortDate(range.to)}`}`}
         actions={
           <>
-            <Button variant="secondary" icon={<Download className="size-4" />} onClick={() => exportCsv(list, range)} disabled={!list.length}>
+            <Button variant="secondary" aria-label="Unduh CSV" icon={<Download className="size-4" />} onClick={() => exportCsv(list, range)} disabled={!list.length}>
               <span className="hidden sm:inline">Unduh CSV</span>
             </Button>
             <Link href="/checkout">
@@ -102,7 +104,7 @@ export default function FakturPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((s) => (
+                  {pager.shown.map((s) => (
                     <tr
                       key={s.id}
                       onClick={() => router.push(`/faktur/${s.id}`)}
@@ -134,7 +136,7 @@ export default function FakturPage() {
 
             {/* Phone list */}
             <ul className="overflow-hidden rounded-xl border border-line bg-surface md:hidden">
-              {list.map((s, i) => (
+              {pager.shown.map((s, i) => (
                 <li key={s.id} className={i ? "border-t border-line-soft" : ""}>
                   <Link href={`/faktur/${s.id}`} className="block px-4 py-3 active:bg-canvas">
                     <div className="flex items-baseline justify-between gap-3">
@@ -156,6 +158,7 @@ export default function FakturPage() {
                 </li>
               ))}
             </ul>
+            <Pager pager={pager} label="faktur" className="mt-3 pb-8" />
           </>
         )}
       </div>

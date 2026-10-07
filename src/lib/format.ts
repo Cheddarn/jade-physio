@@ -124,16 +124,16 @@ export const STATUS_LABEL: Record<BookingStatus, string> = {
   cancelled: "Dibatalkan",
 };
 
-/** Calendar colours for therapists: [block fill, block border/text] */
-export const STAFF_COLORS: Record<string, { name: string; bg: string; fg: string; dot: string }> = {
-  jade: { name: "Jade", bg: "#DDF1E8", fg: "#0B5A43", dot: "#1A8A66" },
-  sky: { name: "Langit", bg: "#DDEBFA", fg: "#1D4E89", dot: "#3B7DD8" },
-  plum: { name: "Plum", bg: "#EEE2F4", fg: "#5E2A7A", dot: "#9453B8" },
-  amber: { name: "Kunyit", bg: "#FBEBCB", fg: "#7A4E06", dot: "#D2921B" },
-  rose: { name: "Mawar", bg: "#FBE1E3", fg: "#8A2432", dot: "#D8506A" },
-  slate: { name: "Batu", bg: "#E4E8EE", fg: "#33404F", dot: "#6B7A8C" },
-  lime: { name: "Daun", bg: "#E8F3D2", fg: "#43600F", dot: "#78A22B" },
-  coral: { name: "Karang", bg: "#FCE4D8", fg: "#8A3A16", dot: "#E0703F" },
+/** Calendar colours for therapists: block fill, block border/text, dot, and `solid`, the fill behind white text (in-session blocks). */
+export const STAFF_COLORS: Record<string, { name: string; bg: string; fg: string; dot: string; solid: string }> = {
+  jade: { name: "Jade", bg: "#DDF1E8", fg: "#0B5A43", dot: "#1A8A66", solid: "#167556" },
+  sky: { name: "Langit", bg: "#DDEBFA", fg: "#1D4E89", dot: "#3B7DD8", solid: "#3067B3" },
+  plum: { name: "Plum", bg: "#EEE2F4", fg: "#5E2A7A", dot: "#9453B8", solid: "#894DAB" },
+  amber: { name: "Kunyit", bg: "#FBEBCB", fg: "#7A4E06", dot: "#D2921B", solid: "#885E11" },
+  rose: { name: "Mawar", bg: "#FBE1E3", fg: "#8A2432", dot: "#D8506A", solid: "#AE4055" },
+  slate: { name: "Batu", bg: "#E4E8EE", fg: "#33404F", dot: "#6B7A8C", solid: "#5C6878" },
+  lime: { name: "Daun", bg: "#E8F3D2", fg: "#43600F", dot: "#78A22B", solid: "#53711E" },
+  coral: { name: "Karang", bg: "#FCE4D8", fg: "#8A3A16", dot: "#E0703F", solid: "#A1502D" },
 };
 
 export const staffColor = (key?: string) => STAFF_COLORS[key ?? ""] ?? STAFF_COLORS.slate;
@@ -147,3 +147,14 @@ export function voucherCode() {
 
 export const remaining = (v: { totalSessions: number; usedSessions: number }) =>
   Math.max(0, v.totalSessions - v.usedSessions);
+
+/** 30 → "1 bulan", 14 → "2 minggu", 45 → "45 hari". */
+export function validityText(days: number) {
+  if (days % 365 === 0) return `${days / 365} tahun`;
+  if (days % 30 === 0) return `${days / 30} bulan`;
+  if (days % 7 === 0) return `${days / 7} minggu`;
+  return `${days} hari`;
+}
+
+/** Days from now until a moment, rounded up (0 = today). */
+export const daysUntil = (ms: number, now = Date.now()) => Math.ceil((ms - now) / 86_400_000);

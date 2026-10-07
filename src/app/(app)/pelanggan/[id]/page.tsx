@@ -3,21 +3,25 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarPlus, MessageCircle, Pencil, ShoppingBag, Ticket, TicketPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarPlus, ClipboardList, MessageCircle, Pencil, ShoppingBag, Ticket, TicketPlus } from "lucide-react";
 import { Avatar, Badge, Button, Card, Empty, Segmented, Spinner, cx } from "@/components/ui";
 import { VoucherCard } from "@/components/Beads";
 import { BookingSheet } from "@/components/BookingSheet";
 import { StatusBadge } from "@/components/BookingDetail";
 import { CustomerForm } from "@/components/CustomerForm";
+import { PatientForm } from "@/components/PatientForm";
+import { RelationGraph } from "@/components/RelationGraph";
+import { DOCUMENTS, GENDER_LABEL, SOURCES, ageFrom, labelsOf, medicalFlags } from "@/lib/flow";
 import { waLink } from "@/components/CustomerPicker";
 import { IssueVoucherSheet, SellPackageSheet, VoucherDetail } from "@/components/VoucherSheets";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { updateCustomer, voucherState } from "@/lib/actions";
 import { useCan } from "@/lib/auth";
 import { PAYMENT_LABEL, dateTime, dayMonth, remaining, rupiah, rupiahShort, shortDate } from "@/lib/format";
-import type { Booking, Customer, Sale, Voucher } from "@/lib/types";
+import type { Booking, Customer, Sale, TherapyReport, Visit, Voucher } from "@/lib/types";
+import { PurchaseHistory, SessionHistory } from "@/components/CustomerHistory";
 
-type Tab = "voucher" | "kunjungan" | "faktur";
+type Tab = "voucher" | "sesi" | "pembelian";
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,11 +31,14 @@ export default function CustomerDetailPage() {
   const { rows: bookings } = useCollection<Booking>("bookings", [["customerId", "==", id]]);
   const can = useCan();
   const { rows: sales } = useCollection<Sale>(can("sales.view") ? "sales" : null, [["customerId", "==", id]]);
+  const { rows: reports } = useCollection<TherapyReport>("reports", [["customerId", "==", id]]);
+  const { rows: walkIns } = useCollection<Visit>("visits", [["customerId", "==", id]]);
   const [tab, setTab] = useState<Tab>("voucher");
   const [editing, setEditing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [selling, setSelling] = useState(false);
   const [issuing, setIssuing] = useState(false);
+  const [intake, setIntake] = useState(false);
   const [openVoucher, setOpenVoucher] = useState<string | null>(null);
 
   const active = useMemo(() => (vouchers ?? []).filter((v) => voucherState(v) === "active"), [vouchers]);
@@ -91,9 +98,16 @@ export default function CustomerDetailPage() {
                 Ubah data
               </Button>
             )}
+            {can("customers.edit") && (
+              <Button size="sm" variant={c.profile ? "secondary" : "primary"} icon={<ClipboardList className="size-3.5" />} onClick={() => setIntake(true)}>
+                {c.profile ? "Formulir pasien" : "Isi formulir pasien"}
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      {c.profile && <ProfileCard c={c} />}
 
       {c.notes && <p className="mt-5 rounded-xl border border-line bg-surface px-4 py-3 text-sm whitespace-pre-line text-ink-2">{c.notes}</p>}
 
@@ -129,14 +143,36 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      <RelationGraph customer={c} />
+
       <Segmented
         className="mt-8 w-full md:w-auto"
         value={tab}
         onChange={setTab}
         options={[
           { value: "voucher", label: `Voucher (${active.length})` },
-          { value: "kunjungan", label: `Kunjungan (${visits.length})` },
-          ...(can("sales.view") ? [{ value: "faktur" as const, label: `Faktur (${invoices.length})` }] : []),
+          {
+            value: "sesi",
+            label: (
+              <>
+                <span className="sm:hidden">Sesi</span>
+                <span className="hidden sm:inline">Riwayat sesi</span> ({visits.filter((b) => b.status !== "cancelled").length})
+              </>
+            ),
+          },
+          ...(can("sales.view")
+            ? [
+                {
+                  value: "pembelian" as const,
+                  label: (
+                    <>
+                      <span className="sm:hidden">Pembelian</span>
+                      <span className="hidden sm:inline">Riwayat pembelian</span> ({invoices.length + past.concat(active).filter((v) => v.source === "manual").length})
+                    </>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -166,45 +202,14 @@ export default function CustomerDetailPage() {
             </div>
           ))}
 
-        {tab === "kunjungan" &&
-          (visits.length === 0 ? (
-            <Empty title="Belum ada kunjungan" />
-          ) : (
-            <Card className="divide-y divide-line-soft">
-              {visits.map((b) => (
-                <div key={b.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{b.serviceName}</p>
-                    <p className="truncate text-[13px] text-muted">
-                      {dateTime(b.startAt)}, {b.staffName}
-                    </p>
-                  </div>
-                  <StatusBadge status={b.status} />
-                </div>
-              ))}
-            </Card>
-          ))}
+        {tab === "sesi" && (
+          <SessionHistory bookings={visits} vouchers={vouchers ?? []} sales={sales} reports={reports ?? []} visits={walkIns ?? []} />
+        )}
 
-        {tab === "faktur" &&
-          (invoices.length === 0 ? (
-            <Empty title="Belum ada faktur" />
-          ) : (
-            <Card className="divide-y divide-line-soft">
-              {invoices.map((s) => (
-                <Link key={s.id} href={`/faktur/${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas">
-                  <div className="min-w-0 flex-1">
-                    <p className={cx("truncate font-semibold", s.status === "void" && "text-muted line-through")}>{s.invoiceNo}</p>
-                    <p className="truncate text-[13px] text-muted">
-                      {dateTime(s.createdAt)}, {PAYMENT_LABEL[s.paymentMethod]}
-                    </p>
-                  </div>
-                  {s.status === "void" ? <Badge tone="danger">Dibatalkan</Badge> : <span className="tnum font-semibold">{rupiah(s.total)}</span>}
-                </Link>
-              ))}
-            </Card>
-          ))}
+        {tab === "pembelian" && can("sales.view") && <PurchaseHistory sales={invoices} vouchers={vouchers ?? []} customerName={c.name} />}
       </div>
 
+      <PatientForm open={intake} onClose={() => setIntake(false)} customer={c} />
       <CustomerForm
         open={editing}
         onClose={() => setEditing(false)}
@@ -237,5 +242,50 @@ function ActionTile({ icon, label, onClick }: { icon: React.ReactNode; label: st
       <span className="text-jade">{icon}</span>
       {label}
     </button>
+  );
+}
+
+function ProfileCard({ c }: { c: Customer }) {
+  const p = c.profile!;
+  const age = ageFrom(p.birthDate);
+  const flags = medicalFlags(p);
+  const rows: [string, string | undefined][] = [
+    ["No. RM", p.medicalRecordNo],
+    ["Jenis kelamin", c.gender ? GENDER_LABEL[c.gender] : undefined],
+    ["Lahir", [p.birthPlace, p.birthDate ? shortDate(p.birthDate) : "", age != null ? `${age} tahun` : ""].filter(Boolean).join(", ")],
+    ["Pekerjaan", p.occupation],
+    ["Tinggi / berat", p.heightCm || p.weightKg ? `${p.heightCm ?? "-"} cm, ${p.weightKg ?? "-"} kg` : undefined],
+    ["Alamat", p.address],
+    ["Asuransi", p.insurance === "ya" ? p.insuranceName || "Ya" : p.insurance === "tidak" ? "Tidak" : undefined],
+    ["Kontak darurat", [p.emergencyName, p.emergencyRelation, p.emergencyPhone].filter(Boolean).join(", ")],
+    ["Keluhan utama", [p.complaint, p.complaintSince ? `sejak ${p.complaintSince}` : ""].filter(Boolean).join(", ")],
+    ["Cedera", p.injury === "ya" ? p.injuryDetail || "Ya" : undefined],
+    ["Obat rutin", p.routineMeds === "ya" ? p.routineMedsDetail || "Ya" : undefined],
+    ["Dokumen", labelsOf(DOCUMENTS, p.documents, p.documentsOther).join(", ")],
+    ["Tahu dari", labelsOf(SOURCES, p.sources, p.sourcesOther).join(", ")],
+  ];
+  return (
+    <div className="mt-5 rounded-xl border border-line bg-surface">
+      {flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-b border-line-soft px-4 py-3">
+          {flags.map((f) => (
+            <Badge key={f} tone="danger">
+              <AlertTriangle className="size-3" />
+              {f}
+            </Badge>
+          ))}
+        </div>
+      )}
+      <dl className="grid gap-x-6 px-4 py-2 text-sm sm:grid-cols-2">
+        {rows
+          .filter(([, v]) => v)
+          .map(([k, v]) => (
+            <div key={k} className="flex gap-3 border-b border-line-soft py-2 last:border-0 sm:[&:nth-last-child(2)]:border-0">
+              <dt className="w-28 shrink-0 text-muted">{k}</dt>
+              <dd className="min-w-0 flex-1 font-medium">{v}</dd>
+            </div>
+          ))}
+      </dl>
+    </div>
   );
 }

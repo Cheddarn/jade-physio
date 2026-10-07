@@ -144,9 +144,10 @@ export function CustomerPicker({
   );
 }
 
-export function waLink(phone?: string) {
+export function waLink(phone?: string, text?: string) {
   if (!phone) return null;
   let d = phone.replace(/\D/g, "");
   if (d.startsWith("0")) d = "62" + d.slice(1);
-  return d.length >= 9 ? `https://wa.me/${d}` : null;
+  if (d.length < 9) return null;
+  return `https://wa.me/${d}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }

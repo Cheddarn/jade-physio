@@ -2,8 +2,11 @@ rules_version = '2';
 
 // Roles (collection "access", keyed by lowercase email):
 //   admin     - everything
-//   staff     - front desk: bookings, customers, checkout, vouchers, invoices (no void, no reports)
-//   therapist - read schedule and patients; can only start/undo their own sessions
+//   manager   - everything except the access list
+//   staff     - front desk: patient flow, bookings, customers, checkout, vouchers, invoices (no void, no reports)
+//   therapist - read schedule and patients; can only start/finish their own sessions
+//   cleaning  - patient flow only: mark shoes changed / returned
+//   patient   - self-registered; own portal account and own booking requests only
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -25,8 +28,26 @@ service cloud.firestore {
     function isAdmin() {
       return member() && role() == 'admin';
     }
+    // Admin and manager: catalogue, reports, voids.
+    function isManager() {
+      return member() && role() in ['admin', 'manager'];
+    }
     function isDesk() {
-      return member() && role() in ['admin', 'staff'];
+      return member() && role() in ['admin', 'manager', 'staff'];
+    }
+    function isCleaning() {
+      return member() && role() == 'cleaning';
+    }
+    function isPatient() {
+      return member() && role() == 'patient';
+    }
+    // Everyone who works at the clinic.
+    function staffRole() {
+      return member() && role() in ['admin', 'manager', 'staff', 'therapist', 'cleaning'];
+    }
+    // Who may read patient records: not cleaning, not patients.
+    function clinical() {
+      return member() && role() in ['admin', 'manager', 'staff', 'therapist'];
     }
     function isTherapist() {
       return member() && role() == 'therapist';
@@ -49,7 +70,10 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (signedIn() && myEmail() == email && !setupDone()
             && existsAfter(/databases/$(database)/documents/meta/setup)
-            && request.resource.data.role == 'admin');
+            && request.resource.data.role == 'admin')
+        // Patients sign up themselves, as patients only.
+        || (signedIn() && myEmail() == email && setupDone()
+            && request.resource.data.role == 'patient');
       // Nobody can change or remove their own access.
       allow update, delete: if isAdmin() && myEmail() != email;
     }
@@ -66,29 +90,93 @@ service cloud.firestore {
       allow read, write: if isDesk();
     }
 
+    // Opening hours and the package reminder window.
+    match /meta/settings {
+      allow read: if member();
+      allow write: if isManager();
+    }
+
+    // ---------- team, shifts, attendance ----------
+    match /team/{email} {
+      allow read: if staffRole();
+      allow write: if isManager();
+    }
+
+    // Doc id = email_YYYY-MM-DD. Everyone clocks themselves in and out.
+    match /attendance/{id} {
+      allow read: if isManager() || (staffRole() && (resource == null || resource.data.email == myEmail()));
+      allow create: if staffRole()
+        && request.resource.data.email == myEmail()
+        && id == myEmail() + '_' + request.resource.data.dateKey;
+      allow update: if isManager()
+        || (resource.data.email == myEmail() && onlyChanged(['outAt', 'overtimeMin', 'closing', 'note']));
+      allow delete: if isManager();
+    }
+
+    // ---------- restock requests ----------
+    match /restock/{id} {
+      allow read: if staffRole();
+      allow create: if staffRole() && request.resource.data.createdBy == myEmail() && request.resource.data.done == false;
+      // Anyone at the clinic can tick an item off (or untick it).
+      allow update: if isManager()
+        || (staffRole() && onlyChanged(['done', 'doneAt', 'doneBy', 'doneByName']))
+        || (resource.data.createdBy == myEmail() && resource.data.done == false);
+      allow delete: if isManager() || (resource.data.createdBy == myEmail() && resource.data.done == false);
+    }
+
+    // ---------- therapy reports (doc id = booking id) ----------
+    match /reports/{id} {
+      allow read: if clinical();
+      allow create, update: if isDesk()
+        || (isTherapist() && request.resource.data.staffId == myStaffId()
+            && (resource == null || resource.data.staffId == myStaffId()));
+      allow delete: if isManager();
+    }
+
+    // ---------- patient portal ----------
+    match /accounts/{email} {
+      allow read: if (signedIn() && myEmail() == email) || isDesk();
+      allow write: if signedIn() && myEmail() == email;
+    }
+
+    match /requests/{id} {
+      allow read: if isDesk() || (isPatient() && resource.data.accountEmail == myEmail());
+      allow create: if isPatient()
+        && request.resource.data.accountEmail == myEmail()
+        && request.resource.data.status == 'pending';
+      // The desk confirms or rejects; the patient may only cancel while it's pending.
+      allow update: if isDesk()
+        || (isPatient() && resource.data.accountEmail == myEmail()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled'
+            && onlyChanged(['status']));
+      allow delete: if false;
+    }
+
     // ---------- catalogue ----------
+    // Physios' names are public to patients too (they pick one when booking).
     match /staff/{id} {
       allow read: if member();
-      allow write: if isAdmin();
+      allow write: if isManager();
     }
     match /services/{id} {
       allow read: if member();
-      allow write: if isAdmin();
+      allow write: if isManager();
     }
     match /packages/{id} {
       allow read: if member();
-      allow write: if isAdmin();
+      allow write: if isManager();
     }
 
     // ---------- operations ----------
     match /customers/{id} {
-      allow read: if member();
+      allow read: if clinical();
       allow create, update: if isDesk();
-      allow delete: if isAdmin();
+      allow delete: if isManager();
     }
 
     match /bookings/{id} {
-      allow read: if member();
+      allow read: if clinical();
       allow create, delete: if isDesk();
       allow update: if isDesk()
         || (isTherapist()
@@ -101,16 +189,48 @@ service cloud.firestore {
     match /vouchers/{id} {
       allow read: if member();
       // Staff create vouchers only by selling a package; manual vouchers are admin-only.
-      allow create: if isAdmin() || (isDesk() && request.resource.data.source == 'sale');
+      allow create: if isManager() || (isDesk() && request.resource.data.source == 'sale');
       // Staff redeem sessions at checkout but cannot void a voucher.
-      allow update: if isAdmin() || (isDesk() && request.resource.data.status != 'void');
+      allow update: if isManager() || (isDesk() && request.resource.data.status != 'void');
       allow delete: if false;
     }
 
     match /sales/{id} {
       allow read, create: if isDesk();
-      allow update: if isAdmin(); // voiding an invoice
+      // Managers void invoices; the desk may only attach a receipt link to an old one.
+      allow update: if isManager() || (isDesk() && onlyChanged(['receiptToken']));
       allow delete: if false;
+    }
+
+    // Discounts the manager sets up; the front desk picks from them at checkout.
+    match /discounts/{id} {
+      allow read: if staffRole();
+      allow write: if isManager();
+    }
+
+    // Public receipts: anyone holding the exact link can open one, nobody can list them.
+    match /receipts/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isDesk();
+      allow update: if isManager();
+      allow delete: if false;
+    }
+
+    // ---------- patient flow (walk-in, shoes, bed) ----------
+    match /visits/{id} {
+      allow read: if staffRole();
+      allow create, delete: if isDesk();
+      allow update: if isDesk()
+        // Cleaning service: shoe changes only.
+        || (isCleaning()
+            && onlyChanged(['shoes', 'shoeRack', 'shoesChangedAt', 'shoesChangedBy',
+                            'shoesReturnedAt', 'shoesReturnedBy', 'closedAt']))
+        // Therapist: start and finish their own patient's session.
+        || (isTherapist()
+            && resource.data.staffId == myStaffId()
+            && onlyChanged(['stage', 'startedAt', 'endedAt', 'closedAt'])
+            && request.resource.data.stage in ['waiting', 'in_session', 'finished']);
     }
   }
 }

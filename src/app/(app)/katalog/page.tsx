@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, Plus } from "lucide-react";
+import { BadgePercent, LayoutGrid, Plus } from "lucide-react";
 import { Badge, Button, Card, Empty, PageHeader, Segmented, Spinner, cx } from "@/components/ui";
 import { Beads } from "@/components/Beads";
-import { PackageForm, ServiceForm } from "@/components/CatalogForms";
+import { DiscountForm, PackageForm, ServiceForm } from "@/components/CatalogForms";
+import { APPLIES_LABEL, discountValue, usable, useDiscounts } from "@/lib/discounts";
 import { usePackages, useServices } from "@/lib/hooks";
-import { duration, rupiah } from "@/lib/format";
+import { duration, rupiah, validityText } from "@/lib/format";
 import type { Row } from "@/lib/store";
-import type { Package, Service } from "@/lib/types";
+import type { Discount, Package, Service } from "@/lib/types";
 
-type Tab = "layanan" | "paket";
+type Tab = "layanan" | "paket" | "diskon";
 
 export default function KatalogPage() {
   const [tab, setTab] = useState<Tab>("layanan");
@@ -18,6 +19,8 @@ export default function KatalogPage() {
   const { packages, loading: pLoading } = usePackages(true);
   const [editService, setEditService] = useState<Row<Service> | "new" | null>(null);
   const [editPackage, setEditPackage] = useState<Row<Package> | "new" | null>(null);
+  const [editDiscount, setEditDiscount] = useState<Row<Discount> | "new" | null>(null);
+  const { discounts, loading: dLoading } = useDiscounts(true);
 
   const serviceName = (id: string) => services.find((s) => s.id === id)?.name ?? "Layanan dihapus";
 
@@ -25,10 +28,13 @@ export default function KatalogPage() {
     <div className="mx-auto max-w-5xl pb-10">
       <PageHeader
         title="Katalog"
-        subtitle="Layanan yang bisa dibooking dan paket sesi prabayar"
+        subtitle="Layanan, paket sesi prabayar, dan diskon yang boleh dipakai kasir"
         actions={
-          <Button icon={<Plus className="size-4" />} onClick={() => (tab === "layanan" ? setEditService("new") : setEditPackage("new"))}>
-            {tab === "layanan" ? "Layanan baru" : "Paket baru"}
+          <Button
+            icon={<Plus className="size-4" />}
+            onClick={() => (tab === "layanan" ? setEditService("new") : tab === "paket" ? setEditPackage("new") : setEditDiscount("new"))}
+          >
+            {tab === "layanan" ? "Layanan baru" : tab === "paket" ? "Paket baru" : "Diskon baru"}
           </Button>
         }
       />
@@ -40,8 +46,44 @@ export default function KatalogPage() {
           options={[
             { value: "layanan", label: `Layanan (${services.length})` },
             { value: "paket", label: `Paket sesi (${packages.length})` },
+            { value: "diskon", label: `Diskon (${discounts.filter((d) => usable(d)).length})` },
           ]}
         />
+
+        {tab === "diskon" &&
+          (dLoading ? (
+            <Spinner />
+          ) : discounts.length === 0 ? (
+            <Empty
+              icon={<BadgePercent className="size-5" />}
+              title="Belum ada diskon"
+              body="Buat diskon persen atau potongan rupiah. Front desk hanya bisa memakai diskon dari daftar ini, untuk item (layanan atau paket) maupun total transaksi."
+              action={<Button onClick={() => setEditDiscount("new")}>Buat diskon</Button>}
+            />
+          ) : (
+            <Card className="mt-4 divide-y divide-line-soft">
+              {discounts.map((d) => {
+                const on = usable(d);
+                return (
+                  <button key={d.id} onClick={() => setEditDiscount(d)} className="flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-canvas">
+                    <span className={cx("flex size-10 shrink-0 items-center justify-center rounded-xl", on ? "bg-jade-mist text-jade" : "bg-line-soft text-muted")}>
+                      <BadgePercent className="size-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={cx("truncate font-semibold", !on && "text-muted")}>{d.name}</p>
+                      <p className="truncate text-[13px] text-muted">
+                        {APPLIES_LABEL[d.appliesTo]}
+                        {d.validUntil ? `, sampai ${d.validUntil.split("-").reverse().join("/")}` : ""}
+                        {d.note ? `, ${d.note}` : ""}
+                      </p>
+                    </div>
+                    {!d.active ? <Badge>Nonaktif</Badge> : !on ? <Badge tone="amber">Kedaluwarsa</Badge> : null}
+                    <span className="tnum shrink-0 font-bold text-jade-deep">{discountValue(d)}</span>
+                  </button>
+                );
+              })}
+            </Card>
+          ))}
 
         {tab === "layanan" &&
           (sLoading ? (
@@ -106,7 +148,7 @@ export default function KatalogPage() {
                     <Beads total={p.sessions} used={0} className="mt-3" />
                     <p className="tnum mt-3 text-xl font-bold">{rupiah(p.price)}</p>
                     <p className="tnum text-[13px] text-muted">
-                      {rupiah(perSession)} per sesi, {p.validityDays ? `berlaku ${p.validityDays} hari` : "tanpa batas waktu"}
+                      {rupiah(perSession)} per sesi, {p.validityDays ? `berlaku ${validityText(p.validityDays)}` : "tanpa batas waktu"}
                     </p>
                     <p className="mt-2 truncate text-[13px] text-ink-2">
                       {p.serviceIds.length ? p.serviceIds.map(serviceName).join(", ") : "Semua layanan"}
@@ -119,6 +161,7 @@ export default function KatalogPage() {
       </div>
 
       <ServiceForm value={editService} onClose={() => setEditService(null)} />
+      <DiscountForm value={editDiscount} onClose={() => setEditDiscount(null)} />
       <PackageForm value={editPackage} services={services.filter((s) => s.active)} onClose={() => setEditPackage(null)} />
     </div>
   );

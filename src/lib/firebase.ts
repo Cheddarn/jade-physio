@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -21,6 +22,7 @@ export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
 let _app: FirebaseApp | undefined;
 let _db: Firestore | undefined;
 let _auth: Auth | undefined;
+let _storage: FirebaseStorage | undefined;
 
 export function firebaseApp() {
   if (!_app) _app = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -46,4 +48,9 @@ export function db() {
 export function auth() {
   if (!_auth) _auth = getAuth(firebaseApp());
   return _auth;
+}
+
+export function storage() {
+  if (!_storage) _storage = getStorage(firebaseApp());
+  return _storage;
 }

@@ -9,7 +9,7 @@ import { Beads, VoucherCard } from "./Beads";
 import { usePackages, useServices } from "@/lib/hooks";
 import { useCan } from "@/lib/auth";
 import { issueVoucherManual, voidVoucher, voucherState } from "@/lib/actions";
-import { atTime, dateKey, dateTime, rupiah, shortDate } from "@/lib/format";
+import { atTime, dateKey, dateTime, rupiah, shortDate, validityText } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Customer, Voucher } from "@/lib/types";
 
@@ -45,6 +45,8 @@ export function VoucherDetail({ voucher, onClose }: { voucher: Row<Voucher> | nu
           <Info label="Pelanggan" value={<Link className="font-semibold text-jade" href={`/pelanggan/${v.customerId}`}>{v.customerName}</Link>} />
           <Info label="Berlaku untuk" value={scope} />
           <Info label="Dibeli" value={shortDate(v.purchasedAt)} />
+          {v.soldByName && <Info label="Dijual oleh" value={v.soldByName} />}
+          {v.expiresAt && <Info label="Berlaku s/d" value={shortDate(v.expiresAt)} />}
           {can("money.view") && <Info label="Nilai" value={<span className="tnum">{rupiah(v.pricePaid)}</span>} />}
           <Info
             label="Asal"
@@ -298,7 +300,7 @@ export function SellPackageSheet({ open, onClose, customerId }: { open: boolean;
             <Beads total={p.sessions} used={0} size={10} className="mt-2.5" />
             <span className="mt-2 block text-[13px] text-muted">
               {rupiah(Math.round(p.price / p.sessions))} per sesi
-              {p.validityDays ? `, berlaku ${p.validityDays} hari` : ", tanpa batas waktu"}
+              {p.validityDays ? `, berlaku ${validityText(p.validityDays)}` : ", tanpa batas waktu"}
             </span>
           </button>
         ))}

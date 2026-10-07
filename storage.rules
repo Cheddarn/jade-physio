@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Therapy report files (PDF / photos), uploaded by physios and the front desk.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function role() {
+      return firestore.get(/databases/(default)/documents/access/$(request.auth.token.email.lower())).data.role;
+    }
+    function clinical() {
+      return request.auth != null && request.auth.token.email != null
+        && role() in ['admin', 'manager', 'staff', 'therapist'];
+    }
+
+    match /reports/{bookingId}/{file} {
+      allow read: if clinical();
+      allow create, update: if clinical()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png)');
+      allow delete: if clinical();
+    }
+  }
+}
