@@ -4,7 +4,7 @@ import { addDays, atTime, dateKey } from "./format";
 type Doc = Record<string, unknown>;
 type Data = Record<string, Record<string, Doc>>;
 
-const KEY = "jade-physio-demo-v7";
+const KEY = "jade-physio-demo-v8";
 let data: Data | null = null;
 const listeners = new Set<() => void>();
 
@@ -157,7 +157,7 @@ function seed(): Data {
 
   const d: Data = {
     staff: {}, services: {}, packages: {}, customers: {}, bookings: {}, vouchers: {}, sales: {}, meta: {}, access: {}, visits: {},
-    team: {}, attendance: {}, reports: {}, restock: {}, requests: {}, accounts: {}, discounts: {}, receipts: {},
+    team: {}, attendance: {}, reports: {}, restock: {}, requests: {}, accounts: {}, discounts: {}, receipts: {}, memos: {},
   };
   const staff = [
     { id: "st1", name: "Ft. Andini", color: "jade", gender: "P" },
@@ -598,5 +598,17 @@ function seed(): Data {
   d.access["manajer@jadephysio.id"] ??= { role: "manager", name: "Manajer Demo", addedAt: since };
   d.access["andini@jadephysio.id"] = { role: "therapist", name: "Ft. Andini", staffId: "st1", addedAt: since + 2 * 86_400_000 };
   d.access["bagus@jadephysio.id"] = { role: "therapist", name: "Ft. Bagus", staffId: "st2", addedAt: since + 2 * 86_400_000 };
+
+  // The desk's reminders: one due now, one later today, one tomorrow, and one already seen.
+  const onHour = (ms: number) => `${String(new Date(ms).getHours()).padStart(2, "0")}:00`;
+  const memo = (id: string, key: string, time: string | null, text: string, seen?: [by: string, name: string, at: number]) =>
+    (d.memos[id] = {
+      dateKey: key, time, text, createdBy: "admin@jadephysio.id", createdByName: "Admin Demo", createdAt: now - 2 * 86_400_000,
+      seenAt: seen?.[2] ?? null, seenBy: seen?.[0] ?? null, seenByName: seen?.[1] ?? null,
+    });
+  memo("mm1", today, null, "Cek stok handuk dan minyak pijat sebelum pasien sore datang");
+  memo("mm2", today, onHour(Math.min(now + 2 * 3_600_000, atTime(today, "23:00"))), "Telepon distributor alat TENS, tanyakan jadwal kiriman");
+  memo("mm3", addDays(today, 1), "09:00", "Bayar tagihan listrik dan internet klinik");
+  memo("mm4", addDays(today, -1), "16:00", "Kirim rekap pemasukan minggu ini ke pemilik", ["manajer@jadephysio.id", "Manajer Demo", now - 20 * 3_600_000]);
   return JSON.parse(JSON.stringify(d));
 }

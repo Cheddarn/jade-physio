@@ -11,6 +11,7 @@ import { NAV, NAV_GROUPS } from "@/lib/nav";
 import { CommandPalette, SearchButton } from "./CommandPalette";
 import { FlowAlertsProvider, useFlowAlerts } from "./FlowAlerts";
 import { ClockCard } from "./Attendance";
+import { ReminderPopups } from "./Memos";
 import { DEMO_MODE } from "@/lib/firebase";
 import { BUSINESS } from "@/lib/format";
 
@@ -126,6 +127,7 @@ function Shell({ children }: { children: ReactNode }) {
 
       <main className="pb-[calc(72px+var(--safe-bottom))] md:pb-0 print:!pb-0">{children}</main>
       <CommandPalette />
+      <ReminderPopups />
 
       {/* Mobile tab bar */}
       <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[var(--safe-bottom)] backdrop-blur md:hidden">

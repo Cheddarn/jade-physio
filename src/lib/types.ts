@@ -312,6 +312,23 @@ export interface DayHours {
 /** Keys "0" (Minggu) to "6" (Sabtu), like Date.getDay(). */
 export type Week = Record<string, DayHours | null>;
 
+/**
+ * A reminder the desk sets for a date, like a calendar app: it pops up on that day (from the time, if set)
+ * until someone confirms they have seen it. One confirmation clears it for everyone.
+ */
+export interface Memo {
+  dateKey: string;
+  /** "HH:MM", or null to show from the start of the day. */
+  time: string | null;
+  text: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: number;
+  seenAt: number | null;
+  seenBy: string | null;
+  seenByName: string | null;
+}
+
 export interface Settings {
   hours: Week;
   /** Remind patients this many days before a package expires. */
@@ -320,6 +337,17 @@ export interface Settings {
   followUpDays: number;
   /** WhatsApp wording the admin changed. Missing keys use the built-in text. */
   templates: Partial<Record<import("./templates").TemplateKey, string>>;
+  /** Nudges for the admin every so often while the clinic is open, e.g. "reply to TikTok DMs". */
+  routines: Routine[];
+}
+
+/** A repeating reminder: pops up for admins every `everyMin` minutes from opening time until closing. */
+export interface Routine {
+  /** Stable key: each device remembers when it last confirmed this routine. */
+  id: string;
+  text: string;
+  everyMin: number;
+  on: boolean;
 }
 
 /** Everyone who works here (not patients), with their weekly shift. Doc id = email. */

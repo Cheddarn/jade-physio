@@ -140,6 +140,11 @@ service cloud.firestore {
       allow write: if signedIn() && myEmail() == email;
     }
 
+    // The desk's own dated reminders (Pengingat).
+    match /memos/{id} {
+      allow read, create, update, delete: if isDesk();
+    }
+
     match /requests/{id} {
       allow read: if isDesk() || (isPatient() && resource.data.accountEmail == myEmail());
       allow create: if isPatient()

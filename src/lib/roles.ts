@@ -59,6 +59,7 @@ export type Cap =
   | "restock"
   | "discounts.manage" // create discounts, give a manual discount
   | "templates" // wording of WhatsApp messages to patients
+  | "memos" // the desk's own dated reminders on the calendar
   | "portal";
 
 const ALL: Cap[] = [
@@ -85,6 +86,7 @@ const ALL: Cap[] = [
   "restock",
   "discounts.manage",
   "templates",
+  "memos",
 ];
 
 const CAPS: Record<Role, Cap[]> = {
@@ -113,6 +115,7 @@ export const ROUTE_CAP: [prefix: string, cap: Cap][] = [
   ["/laporan", "reports"],
   ["/katalog", "catalog"],
   ["/template-wa", "templates"],
+  ["/pengingat", "memos"],
   ["/tim", "team"],
 ];
 

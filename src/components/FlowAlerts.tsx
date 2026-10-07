@@ -6,7 +6,10 @@ import { can as canRole, isStaffRole } from "@/lib/roles";
 import { useCollection, useNow, useStaff } from "@/lib/hooks";
 import { dateKey, shortDate, time } from "@/lib/format";
 import { tasksFor, type Task, type VisitRow } from "@/lib/flow";
-import type { Booking, BookingRequest, TherapyReport, Visit } from "@/lib/types";
+import { isRoutineSeenKey, lastRoutineAt, readRoutineSeen, useDueMemos, writeRoutineSeen } from "@/lib/memos";
+import { hoursOn, useSettings } from "@/lib/settings";
+import type { Row } from "@/lib/store";
+import type { Booking, BookingRequest, Memo, Routine, TherapyReport, Visit } from "@/lib/types";
 import { useToast } from "./ui";
 
 interface AlertsApi {
@@ -21,6 +24,11 @@ interface AlertsApi {
   setSound: (on: boolean) => void;
   notifyAllowed: boolean | null; // null: browser has no notifications
   askNotify: () => void;
+  /** Dated reminders whose time has come and nobody has confirmed. */
+  memos: Row<Memo>[];
+  /** Routine nudges due for this admin now, with when they came up. */
+  routines: (Routine & { at: number })[];
+  confirmRoutine: (id: string) => void;
 }
 
 const Ctx = createContext<AlertsApi>({
@@ -32,6 +40,9 @@ const Ctx = createContext<AlertsApi>({
   setSound: () => {},
   notifyAllowed: null,
   askNotify: () => {},
+  memos: [],
+  routines: [],
+  confirmRoutine: () => {},
 });
 export const useFlowAlerts = () => useContext(Ctx);
 
@@ -65,7 +76,8 @@ function chime() {
 export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   const user = useUser();
   const toast = useToast();
-  const today = dateKey(useNow(60_000));
+  const now = useNow(30_000);
+  const today = dateKey(now);
   // Patients only see their own portal, never the clinic's live board.
   const { rows: visits } = useCollection<Visit>(isStaffRole(user.role) ? "visits" : null, [["dateKey", "==", today]]);
   const { staff } = useStaff(true);
@@ -114,14 +126,56 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
     [requests],
   );
 
-  const tasks = useMemo(() => [...flowTasks, ...reportTasks, ...requestTasks], [flowTasks, reportTasks, requestTasks]);
+  // The desk's dated reminders, once their day (and time) comes.
+  const memoDesk = canRole(user.role, "memos");
+  const { due: memos, loaded: memosLoaded } = useDueMemos(memoDesk, now);
+
+  // Routine nudges such as "balas DM TikTok", for the admin at the desk while the clinic is open.
+  const { settings } = useSettings();
+  const routineIds = settings.routines.map((r) => r.id).join("|");
+  const [routineSeen, setRoutineSeen] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    const load = () => setRoutineSeen(Object.fromEntries(routineIds.split("|").filter(Boolean).map((id) => [id, readRoutineSeen(id)])));
+    load();
+    // Confirmed in another tab: hide it here too.
+    const onStorage = (e: StorageEvent) => isRoutineSeenKey(e.key) && load();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [routineIds]);
+  const confirmRoutine = useCallback((id: string) => {
+    const at = Date.now();
+    writeRoutineSeen(id, at);
+    setRoutineSeen((s) => ({ ...s, [id]: at }));
+  }, []);
+  const routines = useMemo(() => {
+    if (user.role !== "admin" || !routineSeen) return [];
+    const hours = hoursOn(settings, today);
+    return settings.routines.flatMap((r) => {
+      const at = lastRoutineAt(r, hours, now);
+      return at != null && at > (routineSeen[r.id] ?? 0) ? [{ ...r, at }] : [];
+    });
+  }, [user.role, routineSeen, settings, today, now]);
+  const reminderTasks = useMemo<Task[]>(
+    () => [
+      ...memos.map((m) => ({ id: `memo:${m.id}`, visitId: "", title: "Pengingat", body: m.text })),
+      // One id per occurrence, so every hour pings again.
+      ...routines.map((r) => ({ id: `routine:${r.id}:${r.at}`, visitId: "", title: "Pengingat rutin", body: r.text })),
+    ],
+    [memos, routines],
+  );
+
+  const tasks = useMemo(
+    () => [...flowTasks, ...reportTasks, ...requestTasks, ...reminderTasks],
+    [flowTasks, reportTasks, requestTasks, reminderTasks],
+  );
   const badges = useMemo(
     () => ({
       "/alur": flowTasks.length + reportTasks.filter((t) => t.visitId).length,
       "/laporan-terapi": missing.length,
       "/kalender": requests?.length ?? 0,
+      "/pengingat": memos.length + routines.length,
     }),
-    [flowTasks, reportTasks, missing, requests],
+    [flowTasks, reportTasks, missing, requests, memos, routines],
   );
 
 
@@ -154,7 +208,8 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef(sound);
   soundRef.current = sound;
   useEffect(() => {
-    if (!visits) return;
+    // Wait for everything that pings, so what is already there on load stays quiet.
+    if (!visits || (memoDesk && !memosLoaded) || !routineSeen) return;
     if (!seen.current) {
       seen.current = new Set(tasks.map((t) => t.id));
       return;
@@ -174,7 +229,8 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
       merged.set(key, prev ? { ...prev, body: `${prev.body}; ${t.body}` } : t);
     }
     for (const t of merged.values()) {
-      toast(`${t.title}: ${t.body}`);
+      // Reminders have their own popup until confirmed; they only chime and notify.
+      if (!/^(memo|routine):/.test(t.id)) toast(`${t.title}: ${t.body}`);
       if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
         try {
           new Notification(t.title, { body: t.body, tag: t.id });
@@ -183,7 +239,7 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [tasks, visits, toast]);
+  }, [tasks, visits, memoDesk, memosLoaded, routineSeen, toast]);
 
   // Show the count in the browser tab, so a background tab still catches the eye.
   useEffect(() => {
@@ -191,7 +247,9 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
     document.title = tasks.length ? `(${tasks.length}) ${base}` : base;
   }, [tasks.length]);
 
-  return (
-    <Ctx.Provider value={{ tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify }}>{children}</Ctx.Provider>
+  const value = useMemo(
+    () => ({ tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine }),
+    [tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine],
   );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

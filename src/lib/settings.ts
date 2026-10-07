@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reminderDays: 7,
   followUpDays: 14,
   templates: {},
+  routines: [{ id: "tiktok-dm", text: "Waktunya cek dan balas DM TikTok 📱💬", everyMin: 60, on: true }],
 };
 
 export function useSettings() {
@@ -30,6 +31,7 @@ export function useSettings() {
       reminderDays: row?.reminderDays ?? DEFAULT_SETTINGS.reminderDays,
       followUpDays: row?.followUpDays ?? DEFAULT_SETTINGS.followUpDays,
       templates: row?.templates ?? {},
+      routines: row?.routines ?? DEFAULT_SETTINGS.routines,
     }),
     [row],
   );

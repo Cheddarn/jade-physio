@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BellRing, CalendarDays, Check, ChevronLeft, ChevronRight, Globe, Play, Plus, Sparkles, Ticket } from "lucide-react";
+import { AlarmClock, BellRing, CalendarDays, Check, ChevronLeft, ChevronRight, Globe, Play, Plus, Sparkles, Ticket } from "lucide-react";
 import { Avatar, Button, Empty, Fab, IconButton, Segmented, Spinner, cx, errorText, useToast } from "@/components/ui";
 import { BookingSheet, type BookingDraft } from "@/components/BookingSheet";
 import { BookingDetail, StatusBadge } from "@/components/BookingDetail";
@@ -17,6 +17,7 @@ import { RequestsSheet, usePendingRequests } from "@/components/RequestsSheet";
 import { DatePicker } from "@/components/DatePicker";
 import { QueryAction } from "@/components/QueryAction";
 import { ReminderSheet, useReminders } from "@/components/ReminderSheet";
+import { MemoSheet, MemoStrip, type MemoDraft } from "@/components/Memos";
 import { dayWord } from "@/lib/reminders";
 import { dot, fromMin, hoursOn, shiftOn, toMin, useSettings, useTeam } from "@/lib/settings";
 
@@ -58,6 +59,7 @@ export default function KalenderPage() {
   const { settings } = useSettings();
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
+  const [memo, setMemo] = useState<MemoDraft | null>(null);
   const [requestFocus, setRequestFocus] = useState<string | null>(null);
   const { team } = useTeam();
   const dayHours = hoursOn(settings, day);
@@ -191,7 +193,13 @@ export default function KalenderPage() {
           <span className="inline-flex h-7 shrink-0 items-center rounded-full border border-line px-3 font-medium text-ink-2">
             {dayHours ? `Buka ${dot(dayHours.start)}–${dot(dayHours.end)}` : "Klinik tutup"}
           </span>
+          {can("memos") && (
+            <Button size="sm" variant="quiet" icon={<AlarmClock className="size-3.5" />} onClick={() => setMemo({ dateKey: day })} className="!h-7">
+              Pengingat
+            </Button>
+          )}
         </div>
+        {can("memos") && <MemoStrip day={day} now={now} onEdit={setMemo} />}
       </header>
 
       {noSetup ? (
@@ -266,6 +274,7 @@ export default function KalenderPage() {
       <BookingSheet open={!!draft} draft={draft} onClose={() => setDraft(null)} />
       {can("requests.manage") && <RequestsSheet open={requestsOpen} focusId={requestFocus} onClose={() => setRequestsOpen(false)} />}
       {manage && <ReminderSheet open={remindOpen} initialDay={remindDay} onClose={() => setRemindOpen(false)} />}
+      {can("memos") && <MemoSheet value={memo} onClose={() => setMemo(null)} />}
       {selected && <BookingDetail booking={selected} staff={staff} onClose={() => setSelectedId(null)} onEdit={openEdit} />}
     </div>
   );
@@ -276,7 +285,7 @@ function RemindButton({ day, onClick }: { day: string; onClick: () => void }) {
   const { open } = useReminders(day);
   return (
     <Button size="sm" variant="secondary" icon={<BellRing className="size-3.5" />} onClick={onClick} title={`Ingatkan pasien ${dayWord(day)}`}>
-      Pengingat{open ? ` (${open})` : ""}
+      Ingatkan pasien{open ? ` (${open})` : ""}
     </Button>
   );
 }

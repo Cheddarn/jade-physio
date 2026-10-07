@@ -1,4 +1,5 @@
 import {
+  AlarmClock,
   BedDouble,
   CalendarClock,
   CalendarDays,
@@ -32,6 +33,7 @@ export const NAV: { group: NavGroup; href: string; label: string; icon: typeof C
   { group: "harian", href: "/kalender", label: "Kalender", icon: CalendarDays, cap: "schedule.view" },
   { group: "harian", href: "/pelanggan", label: "Pelanggan", icon: Users, cap: "customers.view" },
   { group: "harian", href: "/laporan-terapi", label: "Laporan terapi", icon: FileText, cap: "reports.view", sub: "Laporan fisioterapis, PDF, kirim ke pasien" },
+  { group: "harian", href: "/pengingat", label: "Pengingat", icon: AlarmClock, cap: "memos", sub: "Pengingat bertanggal dan rutin untuk admin" },
   { group: "tim", href: "/jadwal-kerja", label: "Jadwal kerja", icon: CalendarClock, cap: "flow.view", sub: "Absen, shift, lembur, jam buka" },
   { group: "tim", href: "/restock", label: "Restock", icon: PackagePlus, cap: "restock", sub: "Barang yang perlu dibeli lagi" },
   { group: "keuangan", href: "/ringkasan", label: "Ringkasan", icon: Gauge, cap: "reports", sub: "Semua yang terjadi di klinik" },
