@@ -22,6 +22,8 @@ import { dot, fromMin, hoursOn, shiftOn, toMin, useSettings, useTeam } from "@/l
 
 const HOUR = 88; // px per hour
 const SNAP = 15;
+/** Hours shown after closing, so the desk can book overtime sessions. */
+const OVERTIME_HOURS = 2;
 
 type View = "jadwal" | "daftar";
 const VIEW_KEY = "jade-physio-kalender-view";
@@ -407,12 +409,12 @@ function Timeline({
   const [hover, setHover] = useState<{ staffId: string; min: number } | null>(null);
   const pending = usePendingRequests(!!showRequests);
   const dayRequests = pending.filter((r) => r.dateKey === day);
-  // The clinic's hours that day, widened if bookings fall outside them.
+  // The clinic's hours that day plus room for overtime after closing, widened if bookings fall outside them.
   const openMin = clinic ? toMin(clinic.start) : BUSINESS.openHour * 60;
   const closeMin = clinic ? toMin(clinic.end) : BUSINESS.closeHour * 60;
   const open = Math.min(Math.floor(openMin / 60), ...bookings.map((b) => Math.floor(minutesOfDay(b.startAt) / 60)));
   const close = Math.max(
-    Math.ceil(closeMin / 60),
+    clinic ? Math.min(24, Math.ceil(closeMin / 60) + OVERTIME_HOURS) : Math.ceil(closeMin / 60),
     ...bookings.map((b) => Math.ceil((minutesOfDay(b.startAt) + b.durationMin) / 60)),
   );
   const yOf = (min: number) => ((min - open * 60) / 60) * HOUR;
@@ -526,7 +528,9 @@ function Timeline({
               const from = Math.max(openMin, shift ? toMin(shift.start) : openMin);
               const to = Math.min(closeMin, shift ? toMin(shift.end) : closeMin);
               if (from > dayStart) off.push([dayStart, from, shift ? "Belum masuk shift" : "Belum buka"]);
-              if (to < dayEnd) off.push([to, dayEnd, shift && toMin(shift.end) < closeMin ? "Selesai shift" : "Tutup"]);
+              if (to < closeMin) off.push([to, closeMin, "Selesai shift"]);
+              // After closing is still bookable, for overtime sessions.
+              if (closeMin < dayEnd) off.push([closeMin, dayEnd, "Lembur"]);
             }
             return (
             <div
