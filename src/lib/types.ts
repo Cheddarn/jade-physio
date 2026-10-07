@@ -42,6 +42,9 @@ export interface Customer {
   /** Filled from the new-patient registration form (Formulir pasien baru). */
   profile?: PatientProfile;
   createdAt: number;
+  /** When the desk last sent a "time for your next session" WhatsApp, and who sent it. */
+  followedUpAt?: number | null;
+  followedUpBy?: string | null;
 }
 
 /** How the linked person relates to this customer: "id is my <kind>". */
@@ -313,6 +316,10 @@ export interface Settings {
   hours: Week;
   /** Remind patients this many days before a package expires. */
   reminderDays: number;
+  /** Follow up patients whose last session was at least this many days ago and who have nothing booked. */
+  followUpDays: number;
+  /** WhatsApp wording the admin changed. Missing keys use the built-in text. */
+  templates: Partial<Record<import("./templates").TemplateKey, string>>;
 }
 
 /** Everyone who works here (not patients), with their weekly shift. Doc id = email. */

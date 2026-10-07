@@ -1,6 +1,7 @@
 import { store } from "./store";
-import { BUSINESS, dateKey, fromDateKey, time } from "./format";
-import type { Booking } from "./types";
+import { dateKey, fromDateKey, time } from "./format";
+import { waMessage } from "./templates";
+import type { Booking, Settings } from "./types";
 
 /** "besok", "hari ini" or the weekday and date, as patients would say it. */
 export function dayWord(key: string, today = dateKey()) {
@@ -13,20 +14,16 @@ export function dayWord(key: string, today = dateKey()) {
   return date;
 }
 
-/** WhatsApp text reminding a patient of their appointment. */
-export function reminderMessage(b: Booking, today = dateKey()) {
-  const first = b.customerName.split(/\s+/)[0];
-  return [
-    `Halo ${first}, kami dari ${BUSINESS.name} ingin mengingatkan jadwal terapi Anda:`,
-    "",
-    `Hari: ${dayWord(b.dateKey, today)}`,
-    `Jam: ${time(b.startAt)} (${b.durationMin} menit)`,
-    `Layanan: ${b.serviceName}`,
-    `Fisioterapis: ${b.staffName}`,
-    "",
-    "Mohon datang 10 menit lebih awal. Balas YA untuk konfirmasi, atau beri tahu kami jika perlu ganti jadwal.",
-    "Terima kasih!",
-  ].join("\n");
+/** WhatsApp text reminding a patient of their appointment, in the admin's wording. */
+export function reminderMessage(b: Booking, settings: Pick<Settings, "templates">, today = dateKey()) {
+  return waMessage(settings, "appointment", {
+    nama: b.customerName.split(/\s+/)[0],
+    hari: dayWord(b.dateKey, today),
+    jam: time(b.startAt),
+    durasi: b.durationMin,
+    layanan: b.serviceName,
+    terapis: b.staffName,
+  });
 }
 
 export const markReminded = (id: string, by: string) => store.update("bookings", id, { remindedAt: Date.now(), remindedBy: by });

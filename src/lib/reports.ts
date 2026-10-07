@@ -2,7 +2,8 @@ import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage
 import { store } from "./store";
 import { DEMO_MODE, storage } from "./firebase";
 import { BUSINESS, longDate, time } from "./format";
-import type { Booking, ReportFile, TherapyReport } from "./types";
+import { waMessage } from "./templates";
+import type { Booking, ReportFile, Settings, TherapyReport } from "./types";
 import type { Row } from "./store";
 
 export const REPORT_TYPES = "application/pdf,image/jpeg,image/png";
@@ -79,19 +80,17 @@ export const reportOwed = (b: Booking, finishedBookingIds: Set<string>, id: stri
 export const reportWritable = (b: Booking, finishedBookingIds: Set<string>, id: string) =>
   reportOwed(b, finishedBookingIds, id) || b.status === "in_session";
 
-export function reportMessage(r: TherapyReport) {
-  const first = r.customerName.split(" ")[0];
-  const lines = [
-    `Halo ${first}, berikut laporan terapi Anda di ${BUSINESS.name}, ${longDate(r.sessionAt)} bersama ${r.staffName}.`,
-    "",
-  ];
-  if (r.treatment) lines.push(`Tindakan: ${r.treatment}`);
-  if (r.advice) lines.push(`Saran & latihan di rumah: ${r.advice}`);
-  if (r.nextVisit) lines.push(`Kunjungan berikutnya: ${r.nextVisit}`);
-  // A demo file lives only in this browser; only real uploads have a link to share.
-  if (r.file?.url && !r.file.url.startsWith("data:")) lines.push("", `Laporan lengkap (PDF): ${r.file.url}`);
-  lines.push("", "Semoga lekas pulih. Terima kasih!");
-  return lines.join("\n");
+export function reportMessage(r: TherapyReport, settings: Pick<Settings, "templates">) {
+  return waMessage(settings, "report", {
+    nama: r.customerName.split(" ")[0],
+    tanggal: longDate(r.sessionAt),
+    terapis: r.staffName,
+    tindakan: r.treatment,
+    saran: r.advice,
+    kunjungan: r.nextVisit,
+    // A demo file lives only in this browser; only real uploads have a link to share.
+    pdf: r.file?.url && !r.file.url.startsWith("data:") ? r.file.url : "",
+  });
 }
 
 /** Plain-text list of a day's patients, for pasting into WhatsApp groups or notes. */

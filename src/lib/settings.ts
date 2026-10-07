@@ -18,6 +18,8 @@ const allDays = (h: DayHours | null): Week => Object.fromEntries(WEEK_ORDER.map(
 export const DEFAULT_SETTINGS: Settings = {
   hours: allDays({ start: `${pad(BUSINESS.openHour)}:00`, end: `${pad(BUSINESS.closeHour)}:00` }),
   reminderDays: 7,
+  followUpDays: 14,
+  templates: {},
 };
 
 export function useSettings() {
@@ -26,6 +28,8 @@ export function useSettings() {
     () => ({
       hours: { ...DEFAULT_SETTINGS.hours, ...(row?.hours ?? {}) },
       reminderDays: row?.reminderDays ?? DEFAULT_SETTINGS.reminderDays,
+      followUpDays: row?.followUpDays ?? DEFAULT_SETTINGS.followUpDays,
+      templates: row?.templates ?? {},
     }),
     [row],
   );

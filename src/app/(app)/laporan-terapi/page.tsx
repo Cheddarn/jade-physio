@@ -14,6 +14,7 @@ import { useCollection } from "@/lib/hooks";
 import { STATUS_LABEL, addDays, dateKey, fromDateKey, shortDate, staffColor, time } from "@/lib/format";
 import { useStaff } from "@/lib/hooks";
 import { dayListText, markReportSent, reportMessage, reportOwed, reportWritable, toBlobUrl } from "@/lib/reports";
+import { useSettings } from "@/lib/settings";
 import type { Row } from "@/lib/store";
 import type { Booking, TherapyReport, Visit } from "@/lib/types";
 
@@ -33,6 +34,7 @@ function Reports() {
   const can = useCan();
   const toast = useToast();
   const { staff } = useStaff(true);
+  const { settings } = useSettings();
   const [day, setDay] = useState(params.get("date") ?? dateKey());
   const [show, setShow] = useState<Show>("semua");
   const [withPhone, setWithPhone] = useState(false);
@@ -91,7 +93,7 @@ function Reports() {
   }
 
   async function send(r: Row<TherapyReport>) {
-    const url = waLink(r.customerPhone, reportMessage(r));
+    const url = waLink(r.customerPhone, reportMessage(r, settings));
     if (!url) return toast("Nomor WhatsApp pasien tidak ada", "error");
     window.open(url, "_blank", "noopener");
     try {

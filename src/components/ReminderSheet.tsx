@@ -8,6 +8,7 @@ import { useUser } from "@/lib/auth";
 import { useCollection, useCustomers } from "@/lib/hooks";
 import { addDays, dateKey, staffColor, time } from "@/lib/format";
 import { dayWord, markReminded, reminderMessage } from "@/lib/reminders";
+import { useSettings } from "@/lib/settings";
 import { useStaff } from "@/lib/hooks";
 import type { Row } from "@/lib/store";
 import type { Booking } from "@/lib/types";
@@ -38,11 +39,12 @@ export function ReminderSheet({ open, onClose, initialDay }: { open: boolean; on
   const { list, loading } = useReminders(day, open);
   const { customers } = useCustomers();
   const { staff } = useStaff(true);
+  const { settings } = useSettings();
   const phoneOf = (b: Booking) => b.customerPhone || customers.find((c) => c.id === b.customerId)?.phone || "";
   const done = list.filter((b) => b.remindedAt).length;
 
   async function send(b: Row<Booking>) {
-    const url = waLink(phoneOf(b), reminderMessage(b));
+    const url = waLink(phoneOf(b), reminderMessage(b, settings));
     if (!url) return toast(`Nomor WhatsApp ${b.customerName} tidak ada`, "error");
     window.open(url, "_blank", "noopener");
     try {

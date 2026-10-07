@@ -39,8 +39,9 @@ import { useCollection, useCustomers, useDoc, usePackages, useServices, useStaff
 import { cartTotals, checkout, voucherCovers, voucherState, type CartLine } from "@/lib/actions";
 import { useCan, useUser } from "@/lib/auth";
 import { discountAmount, discountValue, fits, useDiscounts } from "@/lib/discounts";
-import { useTeam } from "@/lib/settings";
-import { BUSINESS, PAYMENT_LABEL, duration, remaining, rupiah, shortDate, staffColor, time, validityText } from "@/lib/format";
+import { useSettings, useTeam } from "@/lib/settings";
+import { waMessage } from "@/lib/templates";
+import { PAYMENT_LABEL, duration, remaining, rupiah, shortDate, staffColor, time, validityText } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Booking, Customer, Package, PaymentMethod, Voucher } from "@/lib/types";
 
@@ -676,7 +677,11 @@ function Done({
 }) {
   const toast = useToast();
   const link = typeof window !== "undefined" ? `${window.location.origin}/resi/${done.receiptToken}` : "";
-  const wa = waLink(customer.phone, `Halo ${customer.name.split(" ")[0]}, terima kasih sudah berkunjung ke ${BUSINESS.name}. Resi pembayaran ${done.invoiceNo} (${rupiah(done.total)}) bisa dilihat di:\n${link}`);
+  const { settings } = useSettings();
+  const wa = waLink(
+    customer.phone,
+    waMessage(settings, "receipt", { nama: customer.name.split(" ")[0], faktur: done.invoiceNo, total: rupiah(done.total), link }),
+  );
   const { rows } = useCollection<Voucher>("vouchers", [["customerId", "==", customer.id]]);
   const touched = (rows ?? []).filter(
     (v) => v.saleId === done.saleId || v.redemptions?.some((r) => r.saleId === done.saleId),

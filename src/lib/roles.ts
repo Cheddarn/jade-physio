@@ -58,6 +58,7 @@ export type Cap =
   | "requests.manage" // patient booking requests
   | "restock"
   | "discounts.manage" // create discounts, give a manual discount
+  | "templates" // wording of WhatsApp messages to patients
   | "portal";
 
 const ALL: Cap[] = [
@@ -83,6 +84,7 @@ const ALL: Cap[] = [
   "requests.manage",
   "restock",
   "discounts.manage",
+  "templates",
 ];
 
 const CAPS: Record<Role, Cap[]> = {
@@ -110,6 +112,7 @@ export const ROUTE_CAP: [prefix: string, cap: Cap][] = [
   ["/voucher", "vouchers.view"],
   ["/laporan", "reports"],
   ["/katalog", "catalog"],
+  ["/template-wa", "templates"],
   ["/tim", "team"],
 ];
 

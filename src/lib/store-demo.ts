@@ -321,6 +321,35 @@ function seed(): Data {
     }
   }
 
+  // Patients who stopped coming, for the "Perlu follow-up" filter: last session 3 to 6 weeks ago, nothing booked.
+  const lapsed: [name: string, phone: string, gender: string, daysAgo: number][] = [
+    ["Wulan Sari", "0812 6620 1934", "P", 23],
+    ["Teguh Santoso", "0813 7781 4402", "L", 33],
+    ["Nadia Putri", "0857 1190 2286", "P", 45],
+  ];
+  lapsed.forEach(([name, phone, gender, ago], i) => {
+    const id = `cu${names.length + i + 1}`;
+    const key = addDays(today, -ago);
+    const start = atTime(key, "10:00");
+    const sv = services[0];
+    const st = staff[i % staff.length];
+    d.customers[id] = { name, nameLower: name.toLowerCase(), phone, gender, createdAt: start - 30 * 86_400_000 };
+    const bookingId = rid();
+    const saleId = rid();
+    const invoiceNo = invNo();
+    d.bookings[bookingId] = {
+      customerId: id, customerName: name, customerPhone: phone, staffId: st.id, staffName: st.name,
+      serviceId: sv.id, serviceName: sv.name, price: sv.price, startAt: start, durationMin: sv.durationMin,
+      dateKey: key, status: "paid", saleId, invoiceNo, createdAt: start - 3_600_000,
+    };
+    d.sales[saleId] = {
+      invoiceNo, customerId: id, customerName: name, customerPhone: phone, bookingId,
+      items: [{ kind: "service", refId: sv.id, name: sv.name, qty: 1, unitPrice: sv.price, amount: sv.price, staffId: st.id, staffName: st.name, bookingId }],
+      subtotal: sv.price, voucherCovered: 0, discount: 0, total: sv.price, paymentMethod: "qris", status: "paid",
+      createdAt: start + sv.durationMin * 60_000, dateKey: key, createdBy: "admin@jadephysio.id",
+    };
+  });
+
   // Today's schedule
   const todayPlan: [number, string, string, string, string][] = [
     [0, "st1", "sv1", "08:30", "paid"],

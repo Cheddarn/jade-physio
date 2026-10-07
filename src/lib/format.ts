@@ -156,5 +156,12 @@ export function validityText(days: number) {
   return `${days} hari`;
 }
 
+/** How long ago, the way people say it: 9 → "9 hari", 23 → "3 minggu", 75 → "3 bulan". */
+export function agoText(days: number) {
+  if (days < 14) return `${days} hari`;
+  if (days < 60) return `${Math.round(days / 7)} minggu`;
+  return `${Math.round(days / 30)} bulan`;
+}
+
 /** Days from now until a moment, rounded up (0 = today). */
 export const daysUntil = (ms: number, now = Date.now()) => Math.ceil((ms - now) / 86_400_000);

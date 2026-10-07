@@ -7,6 +7,7 @@ import {
   FileText,
   Gauge,
   LayoutGrid,
+  MessageSquareText,
   PackagePlus,
   ReceiptText,
   Ticket,
@@ -38,5 +39,6 @@ export const NAV: { group: NavGroup; href: string; label: string; icon: typeof C
   { group: "keuangan", href: "/faktur", label: "Faktur", icon: ReceiptText, cap: "sales.view", sub: "Riwayat transaksi" },
   { group: "keuangan", href: "/laporan", label: "Laporan", icon: ChartColumn, cap: "reports", sub: "Pemasukan, metode bayar, per terapis" },
   { group: "atur", href: "/katalog", label: "Katalog", icon: LayoutGrid, cap: "catalog", sub: "Layanan dan paket sesi" },
+  { group: "atur", href: "/template-wa", label: "Template WhatsApp", icon: MessageSquareText, cap: "templates", sub: "Teks pesan ke pasien" },
   { group: "atur", href: "/tim", label: "Terapis & akses", icon: UserCog, cap: "team", sub: "Kolom kalender dan akun login" },
 ];
