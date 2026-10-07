@@ -10,6 +10,9 @@ export interface Bed {
   id: string;
   label: string;
   room: number;
+  /** Spot in the room's floor plan: row 0 is against the back wall; col counts from the left, halves sit between. */
+  row: number;
+  col: number;
 }
 
 export const ROOMS = [
@@ -17,14 +20,16 @@ export const ROOMS = [
   { id: 2, name: "Ruang 2" },
 ];
 
+/* The clinic as seen from the entrance: Ruang 1 at the back with 2 beds along the back wall and
+   3 in front of them, then Ruang 2 (a little narrower, flush right) with 2 beds. */
 export const BEDS: Bed[] = [
-  { id: "b1", label: "Bed 1", room: 1 },
-  { id: "b2", label: "Bed 2", room: 1 },
-  { id: "b3", label: "Bed 3", room: 1 },
-  { id: "b4", label: "Bed 4", room: 1 },
-  { id: "b5", label: "Bed 5", room: 1 },
-  { id: "b6", label: "Bed 6", room: 2 },
-  { id: "b7", label: "Bed 7", room: 2 },
+  { id: "b1", label: "Bed 1", room: 1, row: 0, col: 0.5 },
+  { id: "b2", label: "Bed 2", room: 1, row: 0, col: 1.5 },
+  { id: "b3", label: "Bed 3", room: 1, row: 1, col: 0 },
+  { id: "b4", label: "Bed 4", room: 1, row: 1, col: 1 },
+  { id: "b5", label: "Bed 5", room: 1, row: 1, col: 2 },
+  { id: "b6", label: "Bed 6", room: 2, row: 0, col: 0 },
+  { id: "b7", label: "Bed 7", room: 2, row: 0, col: 1 },
 ];
 
 export const bedLabel = (id?: string | null) => BEDS.find((b) => b.id === id)?.label ?? "";

@@ -12,23 +12,32 @@ import type { Staff } from "@/lib/types";
 import { BedLabel, bedTone } from "./BedPlan";
 import { groupColor } from "@/lib/relations";
 
-/* Floor plan in metres-ish units. Room 1 holds beds 1-5 in a row, room 2 holds beds 6-7. */
+/* Floor plan in metres-ish units, +z towards the viewer. Ruang 1 is at the back, Ruang 2 in front of it,
+   narrower and flush with its right wall. Beds sit on the row/col grid from BEDS. */
 const BED_W = 1.0;
 const BED_L = 2.0;
-const GAP = 2.3;
-const ROOM_D = 5.6;
-const ROOM1_W = GAP * 5 + 0.6;
-const ROOM2_W = GAP * 2 + 1.4;
+const COL = 3.0; // bed centre to bed centre, side by side
+const ROW = 3.6; // bed centre to bed centre, back to front (room for the labels in between)
+const PAD = 0.3; // side wall to the first column
+const HEAD = 0.4; // back wall to the bed heads
 const WALL = 0.12;
 const WALL_H = 1.1;
-const ROOM_X: Record<number, number> = { 1: -ROOM2_W / 2 - WALL / 2, 2: ROOM1_W / 2 + WALL / 2 };
+
+const ROOM_RECT: Record<number, { x0: number; x1: number; z0: number; z1: number }> = (() => {
+  const w1 = 3 * COL + 2 * PAD;
+  const w2 = 2 * COL + 2 * PAD;
+  const d1 = HEAD + ROW + BED_L + 1.1;
+  const d2 = HEAD + BED_L + 1.3;
+  const z0 = -(d1 + d2) / 2;
+  return {
+    1: { x0: -w1 / 2, x1: w1 / 2, z0, z1: z0 + d1 },
+    2: { x0: w1 / 2 - w2, x1: w1 / 2, z0: z0 + d1, z1: z0 + d1 + d2 },
+  };
+})();
 
 function bedPosition(bed: Bed) {
-  const inRoom = BEDS.filter((b) => b.room === bed.room);
-  const i = inRoom.indexOf(bed);
-  const w = bed.room === 1 ? ROOM1_W : ROOM2_W;
-  const x = ROOM_X[bed.room] - w / 2 + (w - GAP * inRoom.length) / 2 + GAP * (i + 0.5);
-  return new THREE.Vector3(x, 0, -0.5);
+  const r = ROOM_RECT[bed.room];
+  return new THREE.Vector3(r.x0 + PAD + COL * (bed.col + 0.5), 0, r.z0 + HEAD + BED_L / 2 + ROW * bed.row);
 }
 
 interface BedParts {
@@ -106,7 +115,7 @@ export default function BedMap3D({
     sun.position.set(-6, 14, 9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
-    Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 8, bottom: -8 });
+    Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
     scene.add(sun);
 
     const mat = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
@@ -118,40 +127,46 @@ export default function BedMap3D({
       return mesh;
     };
 
-    // Rooms: floor, three walls, and a doorway on the front.
+    // Rooms: floors, walls, a door between the rooms and a low entrance wall in front.
     const floorMat = mat(0xf1ece2);
     const wallMat = mat(0xffffff, { transparent: true, opacity: 0.92 });
     const trimMat = mat(0x0b5a43);
-    for (const room of ROOMS) {
-      const w = room.id === 1 ? ROOM1_W : ROOM2_W;
-      const cx = ROOM_X[room.id];
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, ROOM_D), floorMat);
-      floor.position.set(cx, -0.05, 0);
+    const wall = (x0: number, z0: number, x1: number, z1: number, h = WALL_H) => {
+      const m = box(Math.abs(x1 - x0) + WALL, h, Math.abs(z1 - z0) + WALL, wallMat);
+      m.position.set((x0 + x1) / 2, h / 2, (z0 + z1) / 2);
+      scene.add(m);
+    };
+    const r1 = ROOM_RECT[1];
+    const r2 = ROOM_RECT[2];
+    for (const r of [r1, r2]) {
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(r.x1 - r.x0, 0.1, r.z1 - r.z0), floorMat);
+      floor.position.set((r.x0 + r.x1) / 2, -0.05, (r.z0 + r.z1) / 2);
       floor.receiveShadow = true;
       scene.add(floor);
-      const back = box(w + WALL, WALL_H, WALL, wallMat);
-      back.position.set(cx, WALL_H / 2, -ROOM_D / 2);
-      scene.add(back);
-      const trim = box(w + WALL, 0.06, WALL + 0.02, trimMat);
-      trim.position.set(cx, WALL_H, -ROOM_D / 2);
-      scene.add(trim);
-      for (const side of [-1, 1]) {
-        const s = box(WALL, WALL_H, ROOM_D, wallMat);
-        s.position.set(cx + (side * w) / 2, WALL_H / 2, 0);
-        scene.add(s);
-      }
-      // Low front wall with a doorway gap in the middle.
-      const seg = (w - 1.6) / 2;
-      for (const side of [-1, 1]) {
-        const f = box(seg, 0.35, WALL, wallMat);
-        f.position.set(cx + side * (0.8 + seg / 2), 0.175, ROOM_D / 2);
-        scene.add(f);
-      }
+    }
+    wall(r1.x0, r1.z0, r1.x1, r1.z0);
+    const trim = box(r1.x1 - r1.x0 + WALL, 0.06, WALL + 0.02, trimMat);
+    trim.position.set(0, WALL_H, r1.z0);
+    scene.add(trim);
+    wall(r1.x0, r1.z0, r1.x0, r1.z1);
+    wall(r1.x1, r1.z0, r1.x1, r2.z1);
+    wall(r2.x0, r2.z0, r2.x0, r2.z1);
+    // Between the rooms, with the door at the right end.
+    wall(r1.x0, r1.z1, r1.x1 - 1.05, r1.z1);
+    wall(r1.x1 - 0.15, r1.z1, r1.x1, r1.z1);
+    // Entrance: low front wall with a gap in the middle.
+    const mid = (r2.x0 + r2.x1) / 2;
+    wall(r2.x0, r2.z1, mid - 0.8, r2.z1, 0.35);
+    wall(mid + 0.8, r2.z1, r2.x1, r2.z1, 0.35);
+
+    // Room names on the floor: Ruang 1 in its empty back-left corner, Ruang 2 by the entrance.
+    const namePos: Record<number, [number, number]> = { 1: [r1.x0 + 1.0, r1.z0 + 0.6], 2: [mid, r2.z1 - 0.45] };
+    for (const room of ROOMS) {
       const name = document.createElement("div");
       name.className = "rounded-full bg-jade-deep/90 px-2.5 py-0.5 text-[11px] font-bold text-white whitespace-nowrap";
       name.textContent = room.name;
       const nameObj = new CSS2DObject(name);
-      nameObj.position.set(cx, 0.05, ROOM_D / 2 - 0.35);
+      nameObj.position.set(namePos[room.id][0], 0.05, namePos[room.id][1]);
       scene.add(nameObj);
     }
 
@@ -231,7 +246,18 @@ export default function BedMap3D({
     }
     setLabels(newLabels);
 
-    // Fit the whole floor in view for any screen shape.
+    // Fit the whole floor, plus headroom for the bed labels, in view for any screen shape.
+    const bounds = new THREE.Box3(new THREE.Vector3(r1.x0, 0, r1.z0), new THREE.Vector3(r1.x1, 2.6, r2.z1));
+    const corners = [0, 1, 2, 3, 4, 5, 6, 7].map(
+      (i) =>
+        new THREE.Vector3(
+          i & 1 ? bounds.max.x : bounds.min.x,
+          i & 2 ? bounds.max.y : bounds.min.y,
+          i & 4 ? bounds.max.z : bounds.min.z,
+        ),
+    );
+    const dir = new THREE.Vector3(0, 1.5, 1).normalize();
+    const screenUp = new THREE.Vector3(0, dir.z, -dir.y);
     function resize() {
       const w = el!.clientWidth;
       const h = el!.clientHeight;
@@ -240,13 +266,25 @@ export default function BedMap3D({
       labelRenderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      const span = ROOM1_W + ROOM2_W + 0.6;
       const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-      // Far enough that the full width fits, and the depth (plus labels) fits the height.
-      const dist = Math.max(span / 2 / (tanV * camera.aspect), (ROOM_D + 3) / 2 / tanV, 10) * 1.02;
-      const dir = new THREE.Vector3(0, 1.15, 0.75).normalize();
-      controls.target.set(0, 0.4, 0.2);
-      camera.position.copy(dir.multiplyScalar(dist)).add(controls.target);
+      // Perspective makes the near side bigger, so recentre on what's on screen, then pull back until it fills ~90%.
+      const target = bounds.getCenter(new THREE.Vector3());
+      let dist = 20;
+      for (let i = 0; i < 6; i++) {
+        camera.position.copy(dir).multiplyScalar(dist).add(target);
+        camera.lookAt(target);
+        camera.updateMatrixWorld();
+        const ndc = corners.map((c) => c.clone().project(camera));
+        const xs = ndc.map((p) => p.x);
+        const ys = ndc.map((p) => p.y);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const half = dist * tanV;
+        target.x += ((x0 + x1) / 2) * half * camera.aspect;
+        target.addScaledVector(screenUp, ((y0 + y1) / 2) * half);
+        dist *= Math.max(x1 - x0, y1 - y0) / 2 / 0.9;
+      }
+      controls.target.copy(target);
+      camera.position.copy(dir).multiplyScalar(dist).add(target);
       controls.maxDistance = dist * 1.6;
       controls.update();
     }
@@ -345,13 +383,20 @@ export default function BedMap3D({
       if (beds.length < 2) continue;
       const color = new THREE.Color(groupColor(gid));
       for (let i = 0; i < beds.length - 1; i++) {
-        // Along the floor, from the foot of one bed to the next, curving toward the viewer
-        // (labels sit above the beds, so a line overhead would be hidden).
-        const foot = (id: string) => bedPosition(BEDS.find((b) => b.id === id)!).setY(0.06).add(new THREE.Vector3(0, 0, BED_L / 2 + 0.25));
-        const a = foot(beds[i]);
-        const b = foot(beds[i + 1]);
-        const mid = a.clone().add(b).multiplyScalar(0.5);
-        mid.z += 0.5 + a.distanceTo(b) * 0.12;
+        // Along the floor, from the edge of one bed to the facing edge of the next, so it never runs
+        // under a bed (labels sit above the beds, so a line overhead would be hidden).
+        const at = (id: string) => bedPosition(BEDS.find((b) => b.id === id)!).setY(0.06);
+        const edge = (from: THREE.Vector3, to: THREE.Vector3) => {
+          const d = to.clone().sub(from);
+          const t = Math.min((BED_W / 2 + 0.25) / Math.abs(d.x || 1e-6), (BED_L / 2 + 0.25) / Math.abs(d.z || 1e-6));
+          return from.clone().addScaledVector(d, t);
+        };
+        const a = edge(at(beds[i]), at(beds[i + 1]));
+        const b = edge(at(beds[i + 1]), at(beds[i]));
+        // Bow off the straight line, toward the viewer where possible.
+        const side = new THREE.Vector3(a.z - b.z, 0, b.x - a.x).normalize();
+        if (side.z < 0 || (side.z === 0 && side.x < 0)) side.negate();
+        const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(side, 0.3 + a.distanceTo(b) * 0.1);
         const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
         const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.07, 8), new THREE.MeshBasicMaterial({ color }));
         g.add(tube);

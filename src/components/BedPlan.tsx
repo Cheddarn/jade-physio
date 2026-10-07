@@ -69,7 +69,9 @@ export function BedLabel({
   );
 }
 
-/** Flat floor plan: same rooms and beds, no 3D needed. */
+const roomCols = (roomId: number) => Math.max(...BEDS.filter((b) => b.room === roomId).map((b) => b.col)) + 1;
+
+/** Flat floor plan: same rooms and bed spots as the 3D view, no 3D needed. */
 export function BedPlan({
   occupancy,
   staff,
@@ -81,15 +83,18 @@ export function BedPlan({
   now: number;
   onPick: (bedId: string) => void;
 }) {
+  const widest = Math.max(...ROOMS.map((r) => roomCols(r.id)));
   return (
-    <div className="grid h-full gap-3 overflow-auto p-3 sm:grid-cols-[5fr_2fr]">
+    <div className="mx-auto flex h-full max-w-2xl flex-col gap-3 overflow-auto p-3">
       {ROOMS.map((room) => {
         const beds = BEDS.filter((b) => b.room === room.id);
+        const cols = roomCols(room.id);
         return (
-          <div key={room.id} className="rounded-xl border-2 border-line bg-[#f6f2ea] p-2.5">
+          // Narrower rooms sit flush right, like the clinic.
+          <div key={room.id} className="ml-auto rounded-xl border-2 border-line bg-[#f6f2ea] p-2.5" style={{ width: `${(100 * cols) / widest}%` }}>
             <p className="mb-2 text-xs font-bold text-jade-deep">{room.name}</p>
-            {/* Phones fit three beds a row so names stay readable. */}
-            <div className={cx("grid gap-2", beds.length > 3 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-2")}>
+            {/* Two tracks per column so half-step spots (row 0 of Ruang 1) land between the beds in front. */}
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols * 2}, minmax(0, 1fr))` }}>
               {beds.map((bed) => {
                 const v = occupancy.get(bed.id);
                 const tone = bedTone(v);
@@ -102,6 +107,8 @@ export function BedPlan({
                     onClick={() => onPick(bed.id)}
                     className="flex min-h-28 flex-col rounded-lg border p-1.5 text-left text-[11px] leading-tight transition-shadow hover:shadow-[var(--shadow-lift)]"
                     style={{
+                      gridColumn: `${bed.col * 2 + 1} / span 2`,
+                      gridRow: bed.row + 1,
                       background: tone === "free" ? "#fff" : tone === "reserved" ? "#fbebcb" : c.bg,
                       borderColor: tone === "free" ? "var(--color-line)" : tone === "reserved" ? "#d2921b" : c.dot,
                       color: tone === "session" ? c.fg : undefined,

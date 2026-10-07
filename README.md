@@ -10,7 +10,7 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 
 | Menu | What it does |
 | --- | --- |
-| **Alur pasien** | The live walk-in board, and everyone's home screen. Front desk taps *Pasien datang* (patient gender, how many people need slippers, male/female therapist needed, short complaint). Cleaning service and the matching therapists get an alert right away. The board tracks each patient: shoes changed (with rack no.), registration form, therapist & bed, session, shoes returned. A **3D map** of both rooms (beds 1-5 in Ruang 1, 6-7 in Ruang 2) shows who is on which bed with which therapist; *Denah* is a flat version for phones. |
+| **Alur pasien** | The live walk-in board, and everyone's home screen. Front desk taps *Pasien datang* (patient gender, how many people need slippers, male/female therapist needed, short complaint). Cleaning service and the matching therapists get an alert right away. The board tracks each patient: shoes changed (with rack no.), registration form, therapist & bed, session, shoes returned. A **bed map** (*Denah*) laid out like the clinic (Ruang 1: beds 1-2 along the back wall, 3-5 in front of them; Ruang 2: beds 6-7) shows who is on which bed with which therapist. A 3D version exists but is switched off for now (`SHOW_3D` in `src/app/(app)/alur/page.tsx`). |
 | **Booking saya** (patients) | Patient portal. Patients sign up themselves (*Daftar → Pasien*), add the people on their account (name, phone, gender, relation), and book one or more of them at once, each with their own complaint and preferred physio. The front desk confirms; the patient sees the status live. |
 | **Laporan terapi** | Physios must write a report for every finished session (alert + red badge until done): complaint, findings, treatment, home advice, next visit, plus an optional PDF/JPG/PNG upload. Front desk downloads it, opens a printable PDF, or sends it by WhatsApp (summary + PDF link). *Salin daftar pasien* copies today's patient list as text. |
 | **Jadwal kerja** | Clock in / *Pulang* for every staff member (sidebar and *Lainnya*), with the exact time (hour and minute) in and out and hours worked ("8 jam 12 menit"). Managers see a daily table (shift, masuk, pulang, lama kerja, status), can correct a wrong or forgotten clock-out (overtime is recalculated), and download the month as CSV for payroll. Each person's shift per weekday; time past the shift end counts as overtime (5 min grace), shown live and confirmed at *Pulang* with an optional note. Monthly overtime summary. Clinic opening hours per weekday. |
@@ -29,7 +29,7 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 
 | | Admin | Manajer / supervisor | Front desk | Fisioterapis | Cleaning service | Pasien |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| Alur pasien: board and 3D beds | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+| Alur pasien: board and bed map | ✓ | ✓ | ✓ | ✓ | ✓ | – |
 | Check in, registration form, assign therapist & bed | ✓ | ✓ | ✓ | – | – | – |
 | Shoes changed / returned | ✓ | ✓ | ✓ | – | ✓ | – |
 | Start / finish a session | ✓ | ✓ | ✓ | own patients | – | – |

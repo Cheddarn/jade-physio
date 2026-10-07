@@ -23,6 +23,8 @@ const BedMap3D = dynamic(() => import("@/components/BedMap3D"), {
 });
 
 const MAP_KEY = "jade-physio-map";
+/** The 3D bed map is hidden for now; set to true to bring back the 3D / Denah switch. */
+const SHOW_3D = false;
 
 export default function AlurPage() {
   const user = useUser();
@@ -39,7 +41,8 @@ export default function AlurPage() {
   const [assignId, setAssignId] = useState<string | null>(null);
   const [assignBed, setAssignBed] = useState<string | undefined>();
   const [formFor, setFormFor] = useState<{ customerId: string; visitId?: string; fresh?: Row<Customer> } | null>(null);
-  const [mapMode, setMapModeState] = useState<"3d" | "plan">("3d");
+  const [savedMapMode, setMapModeState] = useState<"3d" | "plan">("3d");
+  const mapMode = SHOW_3D ? savedMapMode : "plan";
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(MAP_KEY);
@@ -126,23 +129,26 @@ export default function AlurPage() {
         )}
 
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5">
+          {/* Phones hide the legend, so without the 3D switch this bar would be empty there. */}
+          <div className={cx(SHOW_3D ? "flex" : "hidden sm:flex", "items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5")}>
             <div className="flex min-w-0 items-center gap-3 text-[12px] text-muted">
               <Legend color="#e4e8ee" label="Kosong" />
               <Legend color="#f6dfa8" label="Menunggu" />
               <Legend color="var(--color-jade-bead)" label="Sesi (warna terapis)" />
             </div>
-            <Segmented
-              size="sm"
-              value={mapMode}
-              onChange={setMapMode}
-              options={[
-                { value: "3d", label: <span className="inline-flex items-center gap-1"><Box className="size-3.5" />3D</span> },
-                { value: "plan", label: <span className="inline-flex items-center gap-1"><LayoutGrid className="size-3.5" />Denah</span> },
-              ]}
-            />
+            {SHOW_3D && (
+              <Segmented
+                size="sm"
+                value={mapMode}
+                onChange={setMapMode}
+                options={[
+                  { value: "3d", label: <span className="inline-flex items-center gap-1"><Box className="size-3.5" />3D</span> },
+                  { value: "plan", label: <span className="inline-flex items-center gap-1"><LayoutGrid className="size-3.5" />Denah</span> },
+                ]}
+              />
+            )}
           </div>
-          <div className={cx(mapMode === "3d" ? "h-[300px] md:h-[400px]" : "md:h-[300px]", "bg-gradient-to-b from-[#eef4f1] to-surface")}>
+          <div className={cx(mapMode === "3d" && "h-[360px] md:h-[520px]", "bg-gradient-to-b from-[#eef4f1] to-surface")}>
             {rows === null ? (
               <Spinner className="h-full" />
             ) : mapMode === "3d" ? (
