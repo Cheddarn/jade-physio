@@ -19,10 +19,7 @@ export { NAV };
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cx("inline-flex items-center gap-2.5", className)}>
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <circle cx="14" cy="14" r="12.5" fill="none" stroke="var(--color-jade)" strokeWidth="3" />
-        <circle cx="14" cy="14" r="5" fill="var(--color-jade-bead)" />
-      </svg>
+      <img src="/logo.png" width={28} height={28} alt="" className="size-7 shrink-0 rounded-md" />
       <span className="text-[17px] font-bold tracking-[-0.01em]">{BUSINESS.name}</span>
     </span>
   );
