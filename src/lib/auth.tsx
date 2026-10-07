@@ -11,7 +11,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
 import { auth, db, DEMO_MODE } from "./firebase";
-import { can as canRole, isRole, type Cap, type Role } from "./roles";
+import { can as canRole, isRole, normalizeRole, type Cap, type Role } from "./roles";
 import type { Access, PortalAccount } from "./types";
 
 export interface SessionUser {
@@ -43,7 +43,6 @@ const Ctx = createContext<AuthApi | null>(null);
 export const DEMO_USERS: Record<Role, SessionUser> = {
   admin: { email: "admin@jadephysio.id", name: "Admin Demo", role: "admin" },
   manager: { email: "manajer@jadephysio.id", name: "Manajer Demo", role: "manager" },
-  staff: { email: "kasir@jadephysio.id", name: "Front Desk Demo", role: "staff" },
   therapist: { email: "andini@jadephysio.id", name: "Ft. Andini", role: "therapist", staffId: "st1" },
   cleaning: { email: "cleaning@jadephysio.id", name: "Pak Joko", role: "cleaning" },
   patient: { email: "rina@gmail.com", name: "Rina Wulandari", role: "patient" },
@@ -82,8 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         doc(db(), "access", email),
         (snap) => {
           const a = snap.exists() ? (snap.data() as Access) : null;
-          if (!a || !isRole(a.role)) setState({ status: "no_access", user: { email, name } });
-          else setState({ status: "ready", user: { email, name: a.name || name, role: a.role, staffId: a.staffId } });
+          const role = normalizeRole(a?.role);
+          if (!a || !role) setState({ status: "no_access", user: { email, name } });
+          else setState({ status: "ready", user: { email, name: a.name || name, role, staffId: a.staffId } });
         },
         () => setState({ status: "no_access", user: { email, name } }),
       );

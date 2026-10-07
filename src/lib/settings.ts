@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { store, type Row } from "./store";
 import { useCollection, useDoc } from "./hooks";
 import { BUSINESS, dateKey, fromDateKey, pad } from "./format";
+import { normalizeRole } from "./roles";
 import type { Attendance, DayHours, Settings, TeamMember, Week } from "./types";
 
 /* ---------------- Clinic settings (meta/settings) ---------------- */
@@ -52,7 +53,11 @@ export const dot = (hhmm?: string | null) => (hhmm ? hhmm.replace(":", ".") : ""
 export function useTeam(includeInactive = false) {
   const { rows, loading } = useCollection<TeamMember>("team");
   const team = useMemo(
-    () => (rows ?? []).filter((t) => includeInactive || t.active).sort((a, b) => a.name.localeCompare(b.name, "id")),
+    () =>
+      (rows ?? [])
+        .filter((t) => includeInactive || t.active)
+        .map((t) => ({ ...t, role: normalizeRole(t.role) ?? t.role }))
+        .sort((a, b) => a.name.localeCompare(b.name, "id")),
     [rows, includeInactive],
   );
   return { team, loading };
@@ -66,7 +71,7 @@ export function shiftOn(member: TeamMember | undefined | null, key: string): Day
 export async function saveTeamMember(email: string, data: Partial<TeamMember>) {
   const cur = await store.get<TeamMember>("team", email);
   if (cur) await store.update("team", email, data);
-  else await store.set("team", email, { name: email, role: "staff", active: true, schedule: {}, ...data });
+  else await store.set("team", email, { name: email, role: "admin", active: true, schedule: {}, ...data });
 }
 
 /* ---------------- Attendance (attendance/{email}_{dateKey}) ---------------- */

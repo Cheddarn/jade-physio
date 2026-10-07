@@ -1,9 +1,8 @@
 rules_version = '2';
 
 // Roles (collection "access", keyed by lowercase email):
-//   admin     - everything
+//   admin     - front desk; everything
 //   manager   - everything except the access list
-//   staff     - front desk: patient flow, bookings, customers, checkout, vouchers, invoices (no void, no reports)
 //   therapist - read schedule and patients; can only start/finish their own sessions
 //   cleaning  - patient flow only: mark shoes changed / returned
 //   patient   - self-registered; own portal account and own booking requests only
@@ -22,8 +21,10 @@ service cloud.firestore {
     function member() {
       return signedIn() && exists(accessPath());
     }
+    // Front desk used to be its own role ('staff'); it is now admin, and old access docs still say 'staff'.
     function role() {
-      return get(accessPath()).data.role;
+      let r = get(accessPath()).data.role;
+      return r == 'staff' ? 'admin' : r;
     }
     function isAdmin() {
       return member() && role() == 'admin';
@@ -33,7 +34,7 @@ service cloud.firestore {
       return member() && role() in ['admin', 'manager'];
     }
     function isDesk() {
-      return member() && role() in ['admin', 'manager', 'staff'];
+      return member() && role() in ['admin', 'manager'];
     }
     function isCleaning() {
       return member() && role() == 'cleaning';
@@ -43,11 +44,11 @@ service cloud.firestore {
     }
     // Everyone who works at the clinic.
     function staffRole() {
-      return member() && role() in ['admin', 'manager', 'staff', 'therapist', 'cleaning'];
+      return member() && role() in ['admin', 'manager', 'therapist', 'cleaning'];
     }
     // Who may read patient records: not cleaning, not patients.
     function clinical() {
-      return member() && role() in ['admin', 'manager', 'staff', 'therapist'];
+      return member() && role() in ['admin', 'manager', 'therapist'];
     }
     function isTherapist() {
       return member() && role() == 'therapist';

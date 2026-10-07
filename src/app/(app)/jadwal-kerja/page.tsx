@@ -7,7 +7,7 @@ import { Avatar, Badge, Button, Card, Empty, Field, IconButton, Input, PageHeade
 import { AttendanceStatus, ClockCard } from "@/components/Attendance";
 import { useCan, useUser } from "@/lib/auth";
 import { useCollection, useNow } from "@/lib/hooks";
-import { ROLE_LABEL, STAFF_ROLES } from "@/lib/roles";
+import { ROLE_LABEL, STAFF_ROLES, normalizeRole } from "@/lib/roles";
 import { dateKey, fromDateKey, pad, time } from "@/lib/format";
 import {
   OVERTIME_GRACE,
@@ -70,11 +70,12 @@ function useSyncTeamFromAccess() {
   useEffect(() => {
     if (!access || loading) return;
     for (const a of access) {
-      if (!STAFF_ROLES.includes(a.role)) continue;
+      const role = normalizeRole(a.role);
+      if (!role || !STAFF_ROLES.includes(role)) continue;
       const t = team.find((x) => x.id === a.id);
-      if (!t) saveTeamMember(a.id, { name: a.name || a.id, role: a.role, staffId: a.staffId, active: true, schedule: {} }).catch(() => {});
-      else if (t.role !== a.role || t.name !== (a.name || a.id) || t.staffId !== a.staffId)
-        saveTeamMember(a.id, { name: a.name || a.id, role: a.role, staffId: a.staffId ?? "" }).catch(() => {});
+      if (!t) saveTeamMember(a.id, { name: a.name || a.id, role, staffId: a.staffId, active: true, schedule: {} }).catch(() => {});
+      else if (t.role !== role || t.name !== (a.name || a.id) || t.staffId !== a.staffId)
+        saveTeamMember(a.id, { name: a.name || a.id, role, staffId: a.staffId ?? "" }).catch(() => {});
     }
     for (const t of team) if (t.active && !access.some((a) => a.id === t.id)) saveTeamMember(t.id, { active: false }).catch(() => {});
   }, [access, team, loading]);

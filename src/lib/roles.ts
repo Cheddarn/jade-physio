@@ -1,16 +1,18 @@
-export type Role = "admin" | "manager" | "staff" | "therapist" | "cleaning" | "patient";
+export type Role = "admin" | "manager" | "therapist" | "cleaning" | "patient";
 
-export const ROLES: Role[] = ["admin", "manager", "staff", "therapist", "cleaning", "patient"];
+export const ROLES: Role[] = ["admin", "manager", "therapist", "cleaning", "patient"];
 /** Roles that work at the clinic (everyone except patients). */
-export const STAFF_ROLES: Role[] = ["admin", "manager", "staff", "therapist", "cleaning"];
+export const STAFF_ROLES: Role[] = ["admin", "manager", "therapist", "cleaning"];
 export const isStaffRole = (r?: Role) => !!r && r !== "patient";
 
 export const isRole = (r: unknown): r is Role => ROLES.includes(r as Role);
 
+/** A role as stored. Front desk used to be its own role ("staff"); it is now Admin, and old records still say "staff". */
+export const normalizeRole = (r: unknown): Role | undefined => (r === "staff" ? "admin" : isRole(r) ? r : undefined);
+
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   manager: "Manajer / supervisor",
-  staff: "Front desk",
   therapist: "Fisioterapis",
   cleaning: "Cleaning service",
   patient: "Pasien",
@@ -20,16 +22,14 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const ROLE_SHORT: Record<Role, string> = {
   admin: "Admin",
   manager: "Manajer",
-  staff: "Front desk",
   therapist: "Terapis",
   cleaning: "Cleaning",
   patient: "Pasien",
 };
 
 export const ROLE_HINT: Record<Role, string> = {
-  admin: "Semua menu, termasuk laporan, katalog, pembatalan faktur, dan pengaturan akses.",
+  admin: "Front desk. Semua menu, termasuk laporan, katalog, pembatalan faktur, dan pengaturan akses.",
   manager: "Semua menu operasional, laporan, katalog, dan pembatalan faktur. Tidak bisa mengatur akses login.",
-  staff: "Alur pasien, pendaftaran, kalender, pelanggan, checkout, voucher, dan faktur. Tidak bisa melihat laporan atau membatalkan faktur.",
   therapist: "Alur pasien dan jadwal sendiri, keluhan pasien. Memulai dan menyelesaikan sesi, tanpa akses ke uang.",
   cleaning: "Hanya tugas sepatu pasien di Alur pasien: ganti sepatu saat datang, kembalikan saat selesai.",
   patient: "Akun pasien: booking sendiri untuk dirinya dan keluarganya. Pasien biasanya mendaftar sendiri.",
@@ -88,21 +88,6 @@ const ALL: Cap[] = [
 const CAPS: Record<Role, Cap[]> = {
   admin: ALL,
   manager: ALL.filter((c) => c !== "team"),
-  staff: [
-    "bookings.manage",
-    "flow.manage",
-    "schedule.view",
-    "customers.view",
-    "checkout",
-    "sales.view",
-    "vouchers.view",
-    "customers.edit",
-    "money.view",
-    "flow.view",
-    "reports.view",
-    "requests.manage",
-    "restock",
-  ],
   therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock"],
   cleaning: ["flow.view", "restock"],
   patient: ["portal"],
@@ -137,6 +122,6 @@ export function routeAllowed(role: Role | undefined, path: string) {
 export const HOME = "/alur";
 export const homeFor = (role?: Role) => (role === "patient" ? "/portal" : HOME);
 
-/** Starting / undoing a session: front desk for anyone, therapists only for their own patients. */
+/** Starting / undoing a session: the desk (admin, manager) for anyone, therapists only for their own patients. */
 export const canRunSession = (u: { role: Role; staffId?: string }, b: { staffId?: string }) =>
   can(u.role, "bookings.manage") || (u.role === "therapist" && !!u.staffId && u.staffId === b.staffId);

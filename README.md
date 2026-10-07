@@ -27,23 +27,23 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 
 ## Roles
 
-| | Admin | Manajer / supervisor | Front desk | Fisioterapis | Cleaning service | Pasien |
-| --- | :-: | :-: | :-: | :-: | :-: | :-: |
-| Alur pasien: board and bed map | ✓ | ✓ | ✓ | ✓ | ✓ | – |
-| Check in, registration form, assign therapist & bed | ✓ | ✓ | ✓ | – | – | – |
-| Shoes changed / returned | ✓ | ✓ | ✓ | – | ✓ | – |
-| Start / finish a session | ✓ | ✓ | ✓ | own patients | – | – |
-| Therapy reports: write | ✓ | ✓ | – | own patients | – | – |
-| Therapy reports: download, send, copy day list | ✓ | ✓ | ✓ | view | – | – |
-| Calendar, customers (incl. complaint, medical history) | ✓ | ✓ | ✓ | ✓ (no money) | – | – |
-| Bookings, checkout, vouchers, invoices, confirm online bookings | ✓ | ✓ | ✓ | – | – | – |
-| Clock in / out, own shift and overtime | ✓ | ✓ | ✓ | ✓ | ✓ | – |
-| Everyone's shifts, overtime, opening hours | ✓ | ✓ | – | – | – | – |
-| Restock: request and tick off | ✓ | ✓ | ✓ | ✓ | ✓ | – |
-| Manual voucher, void voucher, cancel an invoice | ✓ | ✓ | – | – | – | – |
-| Reports, Ringkasan, catalog | ✓ | ✓ | – | – | – | – |
-| Login access list | ✓ | – | – | – | – | – |
-| Own portal: people on the account, book, cancel | – | – | – | – | – | ✓ |
+| | Admin (front desk) | Manajer / supervisor | Fisioterapis | Cleaning service | Pasien |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Alur pasien: board and bed map | ✓ | ✓ | ✓ | ✓ | – |
+| Check in, registration form, assign therapist & bed | ✓ | ✓ | – | – | – |
+| Shoes changed / returned | ✓ | ✓ | – | ✓ | – |
+| Start / finish a session | ✓ | ✓ | own patients | – | – |
+| Therapy reports: write | ✓ | ✓ | own patients | – | – |
+| Therapy reports: download, send, copy day list | ✓ | ✓ | view | – | – |
+| Calendar, customers (incl. complaint, medical history) | ✓ | ✓ | ✓ (no money) | – | – |
+| Bookings, checkout, vouchers, invoices, confirm online bookings | ✓ | ✓ | – | – | – |
+| Clock in / out, own shift and overtime | ✓ | ✓ | ✓ | ✓ | – |
+| Everyone's shifts, overtime, opening hours | ✓ | ✓ | – | – | – |
+| Restock: request and tick off | ✓ | ✓ | ✓ | ✓ | – |
+| Manual voucher, void voucher, cancel an invoice | ✓ | ✓ | – | – | – |
+| Reports, Ringkasan, catalog | ✓ | ✓ | – | – | – |
+| Login access list | ✓ | – | – | – | – |
+| Own portal: people on the account, book, cancel | – | – | – | – | ✓ |
 
 ## Patient flow (Alur pasien)
 
@@ -103,8 +103,8 @@ This creates the voucher without an invoice, so it doesn't count as income twice
 ## Demo mode
 
 To try the app without touching real data, set `NEXT_PUBLIC_DEMO_MODE=1` in `.env.local` and restart.
-It loads sample data into the browser (no login, no Firebase), and the sidebar lets you switch between Admin, Manajer, Front desk, Terapis, Cleaning and Pasien to preview each role.
-Open two tabs with different roles (e.g. Front desk and Cleaning) to see the alerts arrive.
+It loads sample data into the browser (no login, no Firebase), and the sidebar lets you switch between Admin (front desk), Manajer, Terapis, Cleaning and Pasien to preview each role.
+Open two tabs with different roles (e.g. Admin and Cleaning) to see the alerts arrive.
 
 ## Deploying
 

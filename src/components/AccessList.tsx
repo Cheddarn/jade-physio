@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Avatar, Badge, Button, Card, Confirm, Field, Input, Select, Sheet, Spinner, cx, errorText, useToast } from "./ui";
 import { useUser } from "@/lib/auth";
-import { ROLES, ROLE_HINT, ROLE_LABEL, type Role } from "@/lib/roles";
+import { ROLES, ROLE_HINT, ROLE_LABEL, normalizeRole, type Role } from "@/lib/roles";
 import { shortDate, staffColor } from "@/lib/format";
 import { store, type Row } from "@/lib/store";
 import type { Access, Staff } from "@/lib/types";
@@ -14,7 +14,6 @@ import { STAFF_ROLES } from "@/lib/roles";
 const ROLE_TONE: Record<Role, "jade" | "neutral" | "amber" | "outline"> = {
   admin: "jade",
   manager: "jade",
-  staff: "neutral",
   therapist: "amber",
   cleaning: "outline",
   patient: "outline",
@@ -26,10 +25,15 @@ export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Acc
   const [editing, setEditing] = useState<Row<Access> | "new" | null>(null);
   const [removing, setRemoving] = useState<Row<Access> | null>(null);
 
-  const order: Record<Role, number> = { admin: 0, manager: 1, staff: 2, therapist: 3, cleaning: 4, patient: 5 };
+  const order: Record<Role, number> = { admin: 0, manager: 1, therapist: 2, cleaning: 3, patient: 4 };
+  // Old front desk logins are stored as "staff"; show and edit them as Admin. Unknown roles are left out.
+  const known = (rows ?? []).flatMap((a) => {
+    const role = normalizeRole(a.role);
+    return role ? [{ ...a, role }] : [];
+  });
   // Patients register themselves; they're counted below, not listed with the staff.
-  const list = [...(rows ?? [])].filter((a) => a.role !== "patient").sort((a, b) => order[a.role] - order[b.role] || a.addedAt - b.addedAt);
-  const patients = (rows ?? []).filter((a) => a.role === "patient").length;
+  const list = known.filter((a) => a.role !== "patient").sort((a, b) => order[a.role] - order[b.role] || a.addedAt - b.addedAt);
+  const patients = known.filter((a) => a.role === "patient").length;
 
   return (
     <section className="mt-10">
@@ -132,7 +136,8 @@ function AccessSheet({
   const toast = useToast();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<Role>("staff");
+  // New logins start with no role, so nobody gets full Admin access by accident.
+  const [role, setRole] = useState<Role | null>(null);
   const [staffId, setStaffId] = useState("");
   const [busy, setBusy] = useState(false);
   const [openedFor, setOpenedFor] = useState<unknown>(null);
@@ -141,7 +146,7 @@ function AccessSheet({
     if (value === "new") {
       setEmail("");
       setName("");
-      setRole("staff");
+      setRole(null);
       setStaffId("");
     } else if (value) {
       setEmail(value.id);
@@ -172,8 +177,9 @@ function AccessSheet({
           size="lg"
           block
           loading={busy}
-          disabled={!validEmail || taken || (role === "therapist" && !staffId)}
+          disabled={!validEmail || taken || !role || (role === "therapist" && !staffId)}
           onClick={async () => {
+            if (!role) return;
             setBusy(true);
             try {
               const doc: Access = {

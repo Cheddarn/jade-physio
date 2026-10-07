@@ -454,7 +454,7 @@ function seed(): Data {
   const team: [string, string, string, string | null, [string, string, string[]]][] = [
     ["admin@jadephysio.id", "Admin Demo", "admin", null, ["08:00", "17:00", ["0"]]],
     ["manajer@jadephysio.id", "Manajer Demo", "manager", null, ["09:00", "18:00", ["0", "6"]]],
-    ["kasir@jadephysio.id", "Front Desk Demo", "staff", null, ["08:00", "16:00", ["0"]]],
+    ["kasir@jadephysio.id", "Front Desk Demo", "admin", null, ["08:00", "16:00", ["0"]]],
     ["andini@jadephysio.id", "Ft. Andini", "therapist", "st1", ["08:00", "16:00", ["0"]]],
     ["bagus@jadephysio.id", "Ft. Bagus", "therapist", "st2", ["12:00", "21:00", ["0", "1"]]],
     ["cleaning@jadephysio.id", "Pak Joko", "cleaning", null, ["07:30", "15:30", ["0"]]],
@@ -564,7 +564,7 @@ function seed(): Data {
   const since = now - 90 * 86_400_000;
   d.access["admin@jadephysio.id"] = { role: "admin", name: "Admin Demo", addedAt: since };
   d.access["manajer@jadephysio.id"] = { role: "manager", name: "Manajer Demo", addedAt: since + 3_600_000 };
-  d.access["kasir@jadephysio.id"] = { role: "staff", name: "Front Desk Demo", addedAt: since + 86_400_000 };
+  d.access["kasir@jadephysio.id"] = { role: "admin", name: "Front Desk Demo", addedAt: since + 86_400_000 };
   d.access["cleaning@jadephysio.id"] = { role: "cleaning", name: "Pak Joko", addedAt: since + 86_400_000 };
   d.access["manajer@jadephysio.id"] ??= { role: "manager", name: "Manajer Demo", addedAt: since };
   d.access["andini@jadephysio.id"] = { role: "therapist", name: "Ft. Andini", staffId: "st1", addedAt: since + 2 * 86_400_000 };
