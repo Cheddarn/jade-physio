@@ -12,6 +12,7 @@ import {
   nextMedicalRecordNo,
   saveProfile,
 } from "@/lib/flow";
+import { patientInfo } from "@/lib/actions";
 import { shortDate } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Customer, Gender, PatientProfile, YesNo } from "@/lib/types";
@@ -57,7 +58,15 @@ export function PatientForm({
     setOpenedFor(key);
     if (open) {
       setBase({ name: customer?.name ?? "", phone: customer?.phone ?? "", email: customer?.email ?? "", gender: customer?.gender });
-      setP({ ...emptyProfile(), ...(customer?.profile ?? {}) });
+      // Date of birth, KTP and address may already be on the patient's basic data.
+      const info = customer ? patientInfo(customer) : null;
+      setP({
+        ...emptyProfile(),
+        ...(customer?.profile ?? {}),
+        ...(info?.birthDate ? { birthDate: info.birthDate } : {}),
+        ...(info?.nik ? { ktp: info.nik } : {}),
+        ...(info?.address ? { address: info.address } : {}),
+      });
       setError("");
     }
   }

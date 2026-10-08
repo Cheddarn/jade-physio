@@ -15,7 +15,7 @@ import { DOCUMENTS, GENDER_LABEL, SOURCES, ageFrom, labelsOf, medicalFlags } fro
 import { waLink } from "@/components/CustomerPicker";
 import { IssueVoucherSheet, SellPackageSheet, VoucherDetail } from "@/components/VoucherSheets";
 import { useCollection, useDoc } from "@/lib/hooks";
-import { updateCustomer, voucherState } from "@/lib/actions";
+import { patientInfo, updateCustomer, voucherState } from "@/lib/actions";
 import { useCan } from "@/lib/auth";
 import { PAYMENT_LABEL, dateTime, dayMonth, remaining, rupiah, rupiahShort, shortDate } from "@/lib/format";
 import type { Booking, Customer, Sale, TherapyReport, Visit, Voucher } from "@/lib/types";
@@ -112,7 +112,7 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {c.profile && <ProfileCard c={c} />}
+      {(c.profile || c.gender || Object.values(patientInfo(c)).some(Boolean)) && <ProfileCard c={c} />}
 
       {c.notes && <p className="mt-5 rounded-xl border border-line bg-surface px-4 py-3 text-sm whitespace-pre-line text-ink-2">{c.notes}</p>}
 
@@ -218,7 +218,7 @@ export default function CustomerDetailPage() {
       <CustomerForm
         open={editing}
         onClose={() => setEditing(false)}
-        initial={{ name: c.name, phone: c.phone, email: c.email ?? "", notes: c.notes ?? "" }}
+        initial={{ name: c.name, phone: c.phone, email: c.email ?? "", notes: c.notes ?? "", gender: c.gender ?? undefined, ...patientInfo(c) }}
         onSave={(v) => updateCustomer(c.id, v)}
       />
       <BookingSheet open={booking} onClose={() => setBooking(false)} draft={bookingDraft} />
@@ -250,24 +250,27 @@ function ActionTile({ icon, label, onClick }: { icon: React.ReactNode; label: st
   );
 }
 
+/** The patient's data: the basics for everyone, plus the registration form once it is filled in. */
 function ProfileCard({ c }: { c: Customer }) {
-  const p = c.profile!;
-  const age = ageFrom(p.birthDate);
-  const flags = medicalFlags(p);
+  const p = c.profile;
+  const info = patientInfo(c);
+  const age = ageFrom(info.birthDate);
+  const flags = p ? medicalFlags(p) : [];
   const rows: [string, string | undefined][] = [
-    ["No. RM", p.medicalRecordNo],
+    ["No. RM", p?.medicalRecordNo],
     ["Jenis kelamin", c.gender ? GENDER_LABEL[c.gender] : undefined],
-    ["Lahir", [p.birthPlace, p.birthDate ? shortDate(p.birthDate) : "", age != null ? `${age} tahun` : ""].filter(Boolean).join(", ")],
-    ["Pekerjaan", p.occupation],
-    ["Tinggi / berat", p.heightCm || p.weightKg ? `${p.heightCm ?? "-"} cm, ${p.weightKg ?? "-"} kg` : undefined],
-    ["Alamat", p.address],
-    ["Asuransi", p.insurance === "ya" ? p.insuranceName || "Ya" : p.insurance === "tidak" ? "Tidak" : undefined],
-    ["Kontak darurat", [p.emergencyName, p.emergencyRelation, p.emergencyPhone].filter(Boolean).join(", ")],
-    ["Keluhan utama", [p.complaint, p.complaintSince ? `sejak ${p.complaintSince}` : ""].filter(Boolean).join(", ")],
-    ["Cedera", p.injury === "ya" ? p.injuryDetail || "Ya" : undefined],
-    ["Obat rutin", p.routineMeds === "ya" ? p.routineMedsDetail || "Ya" : undefined],
-    ["Dokumen", labelsOf(DOCUMENTS, p.documents, p.documentsOther).join(", ")],
-    ["Tahu dari", labelsOf(SOURCES, p.sources, p.sourcesOther).join(", ")],
+    ["Lahir", [p?.birthPlace, info.birthDate ? shortDate(info.birthDate) : "", age != null ? `${age} tahun` : ""].filter(Boolean).join(", ")],
+    ["No. KTP", info.nik],
+    ["Pekerjaan", p?.occupation],
+    ["Tinggi / berat", p?.heightCm || p?.weightKg ? `${p.heightCm ?? "-"} cm, ${p.weightKg ?? "-"} kg` : undefined],
+    ["Alamat", info.address],
+    ["Asuransi", p?.insurance === "ya" ? p.insuranceName || "Ya" : p?.insurance === "tidak" ? "Tidak" : undefined],
+    ["Kontak darurat", [p?.emergencyName, p?.emergencyRelation, p?.emergencyPhone].filter(Boolean).join(", ")],
+    ["Keluhan utama", [p?.complaint, p?.complaintSince ? `sejak ${p.complaintSince}` : ""].filter(Boolean).join(", ")],
+    ["Cedera", p?.injury === "ya" ? p.injuryDetail || "Ya" : undefined],
+    ["Obat rutin", p?.routineMeds === "ya" ? p.routineMedsDetail || "Ya" : undefined],
+    ["Dokumen", p ? labelsOf(DOCUMENTS, p.documents, p.documentsOther).join(", ") : undefined],
+    ["Tahu dari", p ? labelsOf(SOURCES, p.sources, p.sourcesOther).join(", ") : undefined],
   ];
   return (
     <div className="mt-5 rounded-xl border border-line bg-surface">

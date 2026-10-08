@@ -359,6 +359,10 @@ export async function saveProfile(
     email: base.email?.trim() ?? "",
     gender: base.gender,
     profile,
+    // Also on the patient, so the basic data form shows the same values.
+    birthDate: profile.birthDate ?? "",
+    nik: profile.ktp ?? "",
+    address: profile.address ?? "",
   };
   let id = customerId;
   if (id) await store.update("customers", id, data);

@@ -6,6 +6,7 @@ import type {
   BookingStatus,
   Customer,
   Discount,
+  Gender,
   Receipt,
   Package,
   PaymentMethod,
@@ -19,26 +20,56 @@ import type {
 
 /* ---------------- Customers ---------------- */
 
-export async function createCustomer(input: { name: string; phone: string; email?: string; notes?: string }) {
+/** A patient's basic data as the desk fills it in. */
+export interface CustomerInput {
+  name: string;
+  phone: string;
+  email?: string;
+  notes?: string;
+  gender?: Gender;
+  birthDate?: string;
+  nik?: string;
+  address?: string;
+}
+
+/** Date of birth, KTP and address: the patient's own fields, else what an older registration form recorded. */
+export const patientInfo = (c: Pick<Customer, "birthDate" | "nik" | "address" | "profile">) => ({
+  birthDate: c.birthDate || c.profile?.birthDate || "",
+  nik: c.nik || c.profile?.ktp || "",
+  address: c.address || c.profile?.address || "",
+});
+
+const cleanNik = (nik?: string) => (nik ?? "").replace(/\s/g, "");
+
+export async function createCustomer(input: CustomerInput) {
   const data: Customer = {
     name: input.name.trim(),
     nameLower: input.name.trim().toLowerCase(),
     phone: input.phone.trim(),
     email: input.email?.trim() || undefined,
     notes: input.notes?.trim() || undefined,
+    gender: input.gender,
+    birthDate: input.birthDate || undefined,
+    nik: cleanNik(input.nik) || undefined,
+    address: input.address?.trim() || undefined,
     createdAt: Date.now(),
     source: "klinik",
   };
   return store.add("customers", data);
 }
 
-export async function updateCustomer(id: string, input: { name: string; phone: string; email?: string; notes?: string }) {
+export async function updateCustomer(id: string, input: CustomerInput) {
   await store.update("customers", id, {
     name: input.name.trim(),
     nameLower: input.name.trim().toLowerCase(),
     phone: input.phone.trim(),
     email: input.email?.trim() ?? "",
     notes: input.notes?.trim() ?? "",
+    // Null clears it: "not filled in" is a real answer, as in the old system.
+    gender: input.gender ?? null,
+    birthDate: input.birthDate ?? "",
+    nik: cleanNik(input.nik),
+    address: input.address?.trim() ?? "",
   });
 }
 

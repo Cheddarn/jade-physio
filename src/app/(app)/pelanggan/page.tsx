@@ -138,7 +138,13 @@ export default function PelangganPage() {
     if (filter === "klinik") rows = rows.filter((c) => !isOnline(c));
     if (filter === "online") rows = rows.filter(isOnline);
     if (!t) return rows;
-    return rows.filter((c) => c.nameLower.includes(t) || (digits.length >= 3 && c.phone.replace(/\D/g, "").includes(digits)));
+    // Name, phone, or KTP number (NIK).
+    return rows.filter(
+      (c) =>
+        c.nameLower.includes(t) ||
+        (digits.length >= 3 && c.phone.replace(/\D/g, "").includes(digits)) ||
+        (digits.length >= 6 && (c.nik || c.profile?.ktp || "").includes(digits)),
+    );
   }, [customers, q, filter, sessionsLeft, expiringBy, followUp]);
 
   const pager = usePager(list, "pelanggan", 25);
@@ -200,7 +206,7 @@ export default function PelangganPage() {
       <div className="px-4 md:px-8">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama atau no. HP" className="pl-10" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, no. HP, atau NIK" className="pl-10" />
         </div>
 
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">

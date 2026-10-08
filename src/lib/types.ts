@@ -37,6 +37,10 @@ export interface Customer {
   email?: string;
   notes?: string;
   gender?: Gender;
+  /** Date of birth (YYYY-MM-DD), No. KTP (NIK) and address: kept for every patient, also asked on the registration form. */
+  birthDate?: string;
+  nik?: string;
+  address?: string;
   /** Family and friends who are also patients. Kept on both people. */
   links?: CustomerLink[];
   /** Filled from the new-patient registration form (Formulir pasien baru). */
