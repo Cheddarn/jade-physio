@@ -74,7 +74,7 @@ export function ReminderPopups() {
               Sembunyikan
             </button>
           </div>
-          <ul className="scroll-thin max-h-[min(50vh,420px)] divide-y divide-line-soft overflow-y-auto">
+          <ul className="scroll-thin max-h-[34vh] divide-y divide-line-soft overflow-y-auto md:max-h-[min(50vh,420px)]">
             {routines.map((r) => (
               <li key={r.id} className="px-4 py-3">
                 <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
