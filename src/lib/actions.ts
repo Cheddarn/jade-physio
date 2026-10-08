@@ -27,6 +27,7 @@ export async function createCustomer(input: { name: string; phone: string; email
     email: input.email?.trim() || undefined,
     notes: input.notes?.trim() || undefined,
     createdAt: Date.now(),
+    source: "klinik",
   };
   return store.add("customers", data);
 }

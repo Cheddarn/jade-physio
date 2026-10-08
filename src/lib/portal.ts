@@ -79,9 +79,15 @@ export async function confirmRequest(
       gender: r.gender as Gender | undefined,
       notes: r.complaint || undefined,
       createdAt: Date.now(),
+      // Signed up on the website, not registered at the desk.
+      source: "online",
+      accountEmail: r.accountEmail,
     };
     const id = await store.add("customers", data);
     customer = { id, ...data };
+  } else if (!customer.accountEmail) {
+    // A patient the desk already knew now books online too: remember which account.
+    await store.update("customers", customer.id, { accountEmail: r.accountEmail });
   }
   const bookingId = await createBooking({
     customer,

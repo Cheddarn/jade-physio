@@ -85,6 +85,11 @@ export default function CustomerDetailPage() {
             {c.phone || "Tanpa nomor"}
             {c.email ? `, ${c.email}` : ""}
           </p>
+          <p className="mt-0.5 text-[13px] text-muted">
+            {c.source === "online"
+              ? `Daftar online${c.accountEmail ? `, akun ${c.accountEmail}` : ""}`
+              : `Didaftarkan di klinik${c.accountEmail ? `, juga punya akun online (${c.accountEmail})` : ""}`}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {wa && (
               <a href={wa} target="_blank" rel="noreferrer">

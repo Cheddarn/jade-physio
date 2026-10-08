@@ -42,6 +42,13 @@ export interface Customer {
   /** Filled from the new-patient registration form (Formulir pasien baru). */
   profile?: PatientProfile;
   createdAt: number;
+  /**
+   * How this patient came in. "klinik" (or missing, for older records): registered by the admin at the clinic.
+   * "online": made from a booking the patient placed on the website with their own account.
+   */
+  source?: "klinik" | "online";
+  /** The website account this person books through (the holder's email for family members). */
+  accountEmail?: string | null;
   /** When the desk last sent a "time for your next session" WhatsApp, and who sent it. */
   followedUpAt?: number | null;
   followedUpBy?: string | null;

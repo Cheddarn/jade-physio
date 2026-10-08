@@ -362,7 +362,7 @@ export async function saveProfile(
   };
   let id = customerId;
   if (id) await store.update("customers", id, data);
-  else id = await store.add("customers", { ...data, createdAt: Date.now() } satisfies Customer);
+  else id = await store.add("customers", { ...data, createdAt: Date.now(), source: "klinik" } satisfies Customer);
   if (visitId)
     await store.update("visits", visitId, {
       intakeDone: true,

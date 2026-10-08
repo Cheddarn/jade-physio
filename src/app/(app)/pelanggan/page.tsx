@@ -3,7 +3,7 @@
 import { Pager, usePager } from "@/components/Pager";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BellRing, Check, ChevronRight, History, MessageCircle, Search, UserPlus, Users } from "lucide-react";
+import { BellRing, Check, ChevronRight, Globe, History, MessageCircle, Search, UserPlus, Users } from "lucide-react";
 import { Avatar, Badge, Button, Empty, Input, PageHeader, Select, Spinner, cx, errorText, useToast } from "@/components/ui";
 import { CustomerForm } from "@/components/CustomerForm";
 import { waLink } from "@/components/CustomerPicker";
@@ -13,10 +13,11 @@ import { useCan, useUser } from "@/lib/auth";
 import { addDays, agoText, dateKey, daysUntil, remaining, shortDate } from "@/lib/format";
 import { saveSettings, useSettings } from "@/lib/settings";
 import { waMessage } from "@/lib/templates";
+import { digits as phoneDigits } from "@/lib/portal";
 import { store, type Row } from "@/lib/store";
-import type { Booking, Customer, Voucher } from "@/lib/types";
+import type { Booking, Customer, PortalAccount, Voucher } from "@/lib/types";
 
-type Filter = "semua" | "prabayar" | "expiring" | "followup" | "formulir";
+type Filter = "semua" | "klinik" | "online" | "prabayar" | "expiring" | "followup" | "formulir";
 
 const WINDOWS: [number, string][] = [
   [3, "3 hari"],
@@ -57,6 +58,24 @@ export default function PelangganPage() {
   // Following up to book again is the desk's job.
   const desk = can("bookings.manage");
   const { rows: bookings } = useCollection<Booking>(desk ? "bookings" : null, [["dateKey", ">=", addDays(dateKey(), -LOOKBACK_DAYS)]]);
+  // Patients' own website accounts (only the desk may read them).
+  const { rows: accounts } = useCollection<PortalAccount>(desk ? "accounts" : null);
+  /** Everyone booked through a website account, by phone, so family members match too. */
+  const accountByPhone = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of accounts ?? []) for (const pp of a.persons ?? []) if (phoneDigits(pp.phone).length >= 8) m.set(phoneDigits(pp.phone), a.id);
+    return m;
+  }, [accounts]);
+  const accountOf = (c: Customer) => c.accountEmail ?? accountByPhone.get(phoneDigits(c.phone)) ?? null;
+  const isOnline = (c: Customer) => c.source === "online";
+  /** Signed up on the website but never booked, so there is no patient record yet. */
+  const newAccounts = useMemo(() => {
+    const linked = new Set(customers.map((c) => c.accountEmail).filter(Boolean));
+    const phones = new Set(customers.map((c) => phoneDigits(c.phone)).filter((d) => d.length >= 8));
+    return (accounts ?? [])
+      .filter((a) => !linked.has(a.id) && !(a.persons ?? []).some((pp) => phones.has(phoneDigits(pp.phone))))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [accounts, customers]);
 
   const active = useMemo(() => (vouchers ?? []).filter((v) => voucherState(v) === "active"), [vouchers]);
   const sessionsLeft = useMemo(() => {
@@ -116,6 +135,8 @@ export default function PelangganPage() {
         .filter((c) => followUp.has(c.id))
         .sort((a, b) => Number(contacted(a)) - Number(contacted(b)) || followUp.get(b.id)!.startAt - followUp.get(a.id)!.startAt);
     if (filter === "formulir") rows = rows.filter((c) => !c.profile);
+    if (filter === "klinik") rows = rows.filter((c) => !isOnline(c));
+    if (filter === "online") rows = rows.filter(isOnline);
     if (!t) return rows;
     return rows.filter((c) => c.nameLower.includes(t) || (digits.length >= 3 && c.phone.replace(/\D/g, "").includes(digits)));
   }, [customers, q, filter, sessionsLeft, expiringBy, followUp]);
@@ -124,6 +145,8 @@ export default function PelangganPage() {
 
   const chips: [Filter, string, number | null][] = [
     ["semua", "Semua", null],
+    ["klinik", "Daftar di klinik", customers.filter((c) => !isOnline(c)).length],
+    ["online", "Daftar online", customers.filter(isOnline).length + newAccounts.length],
     ["prabayar", "Punya sesi prabayar", sessionsLeft.size],
     ["expiring", "Paket hampir kedaluwarsa", expiringBy.size],
     ...(desk ? ([["followup", "Perlu follow-up", followUp.size]] as [Filter, string, number][]) : []),
@@ -194,6 +217,7 @@ export default function PelangganPage() {
             >
               {key === "expiring" && <BellRing className="size-3.5" />}
               {key === "followup" && <History className="size-3.5" />}
+              {key === "online" && <Globe className="size-3.5" />}
               {label}
               {n != null && (
                 <span className={cx("tnum rounded-full px-1.5 text-xs", (key === "expiring" || key === "followup") && n > 0 ? "bg-amber text-white" : "bg-line-soft")}>
@@ -279,6 +303,8 @@ export default function PelangganPage() {
           </div>
         )}
 
+        {filter === "online" && !q && newAccounts.length > 0 && <NewAccounts accounts={newAccounts} />}
+
         {loading ? (
           <Spinner />
         ) : list.length === 0 ? (
@@ -291,7 +317,9 @@ export default function PelangganPage() {
                   ? "Tidak ada paket yang hampir kedaluwarsa"
                   : filter === "followup"
                     ? "Tidak ada pasien yang perlu di-follow-up"
-                    : "Belum ada pelanggan"
+                    : filter === "online"
+                      ? "Belum ada pasien online yang booking"
+                      : "Belum ada pelanggan"
             }
             body={
               q
@@ -300,7 +328,9 @@ export default function PelangganPage() {
                   ? "Coba perpanjang rentang waktunya."
                   : filter === "followup"
                     ? "Semua pasien sudah kembali atau sudah punya jadwal. Coba perpendek rentang waktunya."
-                    : "Pelanggan akan muncul di sini setelah dicatat saat booking."
+                    : filter === "online"
+                      ? "Pasien yang daftar sendiri di website muncul di sini setelah booking pertamanya dikonfirmasi."
+                      : "Pelanggan akan muncul di sini setelah dicatat saat booking."
             }
           />
         ) : (
@@ -318,7 +348,11 @@ export default function PelangganPage() {
                       <Avatar name={c.name} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold">{c.name}</p>
-                        <p className="truncate text-[13px] text-muted">{c.phone || "Tanpa nomor"}</p>
+                        {/* The type sits with the phone number, so long names stay readable on phones. */}
+                        <p className="flex min-w-0 items-center gap-2 text-[13px] text-muted">
+                          <span className="truncate">{c.phone || "Tanpa nomor"}</span>
+                          <PatientType online={isOnline(c)} account={accountOf(c)} />
+                        </p>
                         {exp.map((v) => {
                           const d = daysUntil(v.expiresAt!);
                           return (
@@ -389,5 +423,69 @@ export default function PelangganPage() {
       </div>
       <CustomerForm open={adding} onClose={() => setAdding(false)} />
     </div>
+  );
+}
+
+/** "Online": signed up on the website. "Klinik": registered by the admin; a globe if they also have a website account. */
+function PatientType({ online, account }: { online: boolean; account: string | null }) {
+  if (online)
+    return (
+      <span
+        title={account ? `Daftar online, akun ${account}` : "Daftar online"}
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-jade-mist px-2 py-0.5 text-[11px] font-bold text-jade-deep"
+      >
+        <Globe className="size-3" />
+        Online
+      </span>
+    );
+  return (
+    <span
+      title={account ? `Didaftarkan di klinik, juga punya akun online (${account})` : "Didaftarkan di klinik"}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-line-soft px-2 py-0.5 text-[11px] font-bold text-ink-2"
+    >
+      Klinik
+      {account && <Globe className="size-3 text-jade" />}
+    </span>
+  );
+}
+
+/** Website sign-ups with no booking yet: no patient record, but the desk can greet them on WhatsApp. */
+function NewAccounts({ accounts }: { accounts: Row<PortalAccount>[] }) {
+  return (
+    <section className="mt-4">
+      <h2 className="mb-2 text-[13px] font-semibold text-ink-2">Baru daftar online, belum pernah booking ({accounts.length})</h2>
+      <ul className="overflow-hidden rounded-xl border border-line bg-surface">
+        {accounts.map((a, i) => {
+          const self = a.persons?.find((pp) => pp.relation === "self") ?? a.persons?.[0];
+          const wa = waLink(self?.phone);
+          const family = (a.persons?.length ?? 0) - 1;
+          return (
+            <li key={a.id} className={cx("flex items-center gap-3 px-4 py-3", i > 0 && "border-t border-line-soft")}>
+              <Avatar name={a.name} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{a.name}</p>
+                <p className="flex min-w-0 items-center gap-2 text-[13px] text-muted">
+                  <span className="truncate">
+                    {self?.phone || "Tanpa nomor"}, {a.id}
+                  </span>
+                  <PatientType online account={a.id} />
+                </p>
+                <p className="text-[12px] text-muted">
+                  Daftar {shortDate(a.createdAt)}
+                  {family > 0 ? `, ${family} anggota keluarga` : ""}
+                </p>
+              </div>
+              {wa && (
+                <a href={wa} target="_blank" rel="noreferrer" className="shrink-0">
+                  <Button size="sm" variant="secondary" icon={<MessageCircle className="size-3.5" />}>
+                    WhatsApp
+                  </Button>
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
