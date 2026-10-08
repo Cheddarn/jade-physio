@@ -302,7 +302,19 @@ export interface Receipt {
   saleId: string;
   invoiceNo: string;
   customerName: string;
-  items: { name: string; qty: number; unitPrice: number; amount: number; discount?: number; discountName?: string; voucher?: boolean; staffName?: string; kind: "service" | "package" }[];
+  items: {
+    name: string;
+    qty: number;
+    unitPrice: number;
+    amount: number;
+    discount?: number;
+    discountName?: string;
+    voucher?: boolean;
+    staffName?: string;
+    kind: "service" | "package";
+    /** When the session took place (lines from a booking). */
+    at?: number | null;
+  }[];
   subtotal: number;
   voucherCovered: number;
   discount: number;

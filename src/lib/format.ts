@@ -2,8 +2,11 @@ import type { BookingStatus, PaymentMethod } from "./types";
 
 export const BUSINESS = {
   name: "Jade Physio",
-  address: "",
+  address: "Jl. Sei Belutu No.54, Padang Bulan Selayang I, Kec. Medan Selayang, Kota Medan, Sumatera Utara",
   phone: "",
+  /** Shown at the foot of receipts. */
+  instagram: "jadephysio.id",
+  facebook: "Jade Physio",
   openHour: 8,
   closeHour: 21,
 };

@@ -1,14 +1,17 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { CheckCircle2, Printer, XCircle } from "lucide-react";
+import { Printer } from "lucide-react";
 import { Logo } from "@/components/AppShell";
 import { Spinner, cx } from "@/components/ui";
 import { useDoc } from "@/lib/hooks";
-import { BUSINESS, PAYMENT_LABEL, longDate, rupiah, time } from "@/lib/format";
+import { BUSINESS, PAYMENT_LABEL, num, time } from "@/lib/format";
 import type { PaymentMethod, Receipt } from "@/lib/types";
 
-/** Public receipt: anyone with the link can view it, no login. */
+/** "07 Okt 2026" / "07 Oktober 2026". */
+const day = (ms: number, month: "short" | "long") => new Date(ms).toLocaleDateString("id-ID", { day: "2-digit", month, year: "numeric" });
+
+/** Public receipt: anyone with the link can view it, no login. Laid out like the clinic's printed receipts. */
 export default function ReceiptPage() {
   const { token } = useParams<{ token: string }>();
   const { row: r, loading } = useDoc<Receipt>("receipts", token);
@@ -29,76 +32,80 @@ export default function ReceiptPage() {
 
   return (
     <div className="min-h-dvh bg-canvas px-4 py-6 sm:py-12">
-      <main className="print-plain mx-auto max-w-md overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow-lift)]">
-        <header className={cx("px-5 pt-6 pb-5 text-center text-white", isVoid ? "bg-ink-2" : "bg-jade-deep")}>
-          <p className="text-sm font-semibold tracking-wide text-white/80 uppercase">{BUSINESS.name}</p>
-          <span className="mx-auto mt-3 flex size-12 items-center justify-center rounded-full bg-white/15">
-            {isVoid ? <XCircle className="size-7" /> : <CheckCircle2 className="size-7" />}
-          </span>
-          <p className="mt-2 text-sm text-white/80">{isVoid ? "Transaksi dibatalkan" : "Pembayaran berhasil"}</p>
-          <p className={cx("tnum mt-1 text-[32px] leading-tight font-bold", isVoid && "line-through opacity-70")}>{rupiah(r.total)}</p>
-          <p className="mt-1 text-[13px] text-white/80">{PAYMENT_LABEL[r.paymentMethod as PaymentMethod | "voucher"] ?? r.paymentMethod}</p>
+      <main className="print-plain mx-auto max-w-md rounded-2xl bg-surface px-6 py-8 text-sm shadow-[var(--shadow-lift)] sm:px-8">
+        {isVoid && (
+          <p className="mb-6 rounded-lg border-2 border-danger px-3 py-2 text-center text-[13px] font-bold tracking-wide text-danger uppercase">
+            Transaksi dibatalkan
+          </p>
+        )}
+
+        <header className="text-center">
+          <img src="/logo.png" width={64} height={64} alt="" className="mx-auto size-16 rounded-2xl" />
+          <p className="mt-4 text-lg font-bold">{BUSINESS.name}</p>
+          {BUSINESS.address && <p className="mx-auto mt-1 max-w-xs text-[13px] leading-relaxed text-ink-2">{BUSINESS.address}</p>}
+          {BUSINESS.phone && <p className="text-[13px] text-ink-2">{BUSINESS.phone}</p>}
+          <p className="tnum mt-6 font-bold">Faktur {r.invoiceNo}</p>
+          <p className="text-ink-2">{day(r.createdAt, "short")}</p>
         </header>
 
-        <dl className="grid grid-cols-2 gap-3 border-b border-dashed border-line px-5 py-4 text-sm">
-          <div>
-            <dt className="text-[12px] text-muted">No. resi</dt>
-            <dd className="tnum font-semibold">{r.invoiceNo}</dd>
-          </div>
-          <div className="text-right">
-            <dt className="text-[12px] text-muted">Tanggal</dt>
-            <dd className="font-semibold">
-              {longDate(r.createdAt).replace(/^\w+, /, "")}, {time(r.createdAt)}
-            </dd>
-          </div>
-          <div className="col-span-2">
-            <dt className="text-[12px] text-muted">Pasien</dt>
-            <dd className="font-semibold">{r.customerName}</dd>
-          </div>
-        </dl>
+        <hr className="my-5 border-line" />
 
-        <ul className="px-5 py-3">
+        <p className="font-semibold">{r.customerName}</p>
+        <ul className="mt-4 flex flex-col gap-3">
           {r.items.map((i, k) => (
-            <li key={k} className="flex items-start justify-between gap-3 border-b border-line-soft py-3 text-sm last:border-0">
+            <li key={k} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto_6rem] gap-x-2">
+              <span className="tnum">{i.qty}</span>
               <div className="min-w-0">
-                <p className="font-semibold">
-                  {i.qty > 1 ? `${i.qty}× ` : ""}
-                  {i.name}
-                </p>
-                <p className="text-[12px] text-muted">
-                  {i.kind === "package" ? "Paket sesi prabayar" : i.staffName || ""}
-                </p>
-                {i.voucher && <p className="text-[12px] font-semibold text-jade-deep">Dibayar dengan sesi paket</p>}
+                <p className="font-medium">{i.name}</p>
+                {i.at && (
+                  <p className="text-[13px] text-ink-2">
+                    {day(i.at, "long")} {time(i.at)}
+                  </p>
+                )}
+                {i.kind === "package" && <p className="text-[13px] text-ink-2">Paket sesi prabayar</p>}
+                {i.voucher && <p className="text-[13px] text-jade-deep">Dibayar dengan sesi paket</p>}
                 {!!i.discount && (
-                  <p className="text-[12px] font-semibold text-jade-deep">
-                    Diskon {i.discountName}: −{rupiah(i.discount)}
+                  <p className="text-[13px] text-jade-deep">
+                    Diskon {i.discountName}: −Rp {num(i.discount)}
                   </p>
                 )}
               </div>
-              <p className="tnum shrink-0 text-right">
-                {(i.voucher || !!i.discount) && <span className="block text-[12px] text-muted line-through">{rupiah(i.unitPrice * i.qty)}</span>}
-                <span className="font-semibold">{rupiah(i.amount)}</span>
-              </p>
+              <span className="text-ink-2">Rp</span>
+              <span className="tnum text-right">{num(i.amount)}</span>
             </li>
           ))}
         </ul>
 
-        <dl className="mx-5 mb-5 flex flex-col gap-1.5 rounded-xl bg-canvas px-4 py-3 text-sm">
-          <Row label="Subtotal" value={rupiah(r.subtotal)} />
-          {r.voucherCovered > 0 && <Row label="Dibayar sesi paket" value={`−${rupiah(r.voucherCovered)}`} />}
-          {lineDiscount > 0 && <Row label="Diskon item" value={`−${rupiah(lineDiscount)}`} />}
-          {billDiscount > 0 && <Row label={`Diskon${r.billDiscountName ? ` (${r.billDiscountName})` : ""}`} value={`−${rupiah(billDiscount)}`} />}
-          <div className="mt-1 flex items-baseline justify-between border-t border-line pt-2">
-            <dt className="font-bold">Total</dt>
-            <dd className="tnum text-lg font-bold">{rupiah(r.total)}</dd>
-          </div>
-        </dl>
+        <div className="mt-5 flex flex-col gap-1.5 border-t border-line pt-3">
+          <Money label="Sub Total" value={r.subtotal} />
+          {r.voucherCovered > 0 && <Money label="Dibayar sesi paket" value={r.voucherCovered} minus />}
+          {lineDiscount > 0 && <Money label="Diskon item" value={lineDiscount} minus />}
+          {billDiscount > 0 && <Money label={`Diskon${r.billDiscountName ? ` (${r.billDiscountName})` : ""}`} value={billDiscount} minus />}
+        </div>
+        <div className={cx("mt-3 flex flex-col gap-1.5 border-t border-line pt-3", isVoid && "line-through opacity-60")}>
+          <Money label="Total" value={r.total} strong />
+          <Money label="Grand total" value={r.total} />
+          <Money
+            label={PAYMENT_LABEL[r.paymentMethod as PaymentMethod | "voucher"] ?? r.paymentMethod}
+            value={r.total}
+            sub={`${day(r.createdAt, "short")} pukul ${time(r.createdAt)}`}
+          />
+        </div>
 
-        <footer className="border-t border-line-soft px-5 py-4 text-center text-[13px] text-muted">
-          {BUSINESS.address && <p>{BUSINESS.address}</p>}
-          {BUSINESS.phone && <p>{BUSINESS.phone}</p>}
-          <p className="mt-1">Terima kasih, semoga lekas pulih.</p>
-        </footer>
+        {(BUSINESS.instagram || BUSINESS.facebook) && (
+          <footer className="mt-8 text-center text-[13px] text-muted">
+            <p>Social media kami</p>
+            {BUSINESS.instagram && (
+              <p>
+                Instagram:{" "}
+                <a href={`https://instagram.com/${BUSINESS.instagram}`} target="_blank" rel="noreferrer" className="hover:text-jade">
+                  {BUSINESS.instagram}
+                </a>
+              </p>
+            )}
+            {BUSINESS.facebook && <p>Facebook: {BUSINESS.facebook}</p>}
+          </footer>
+        )}
       </main>
       <button
         type="button"
@@ -112,11 +119,19 @@ export default function ReceiptPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** A money row: label, then "Rp" and the amount in their own right-hand columns, like the printed receipt. */
+function Money({ label, value, strong, minus, sub }: { label: string; value: number; strong?: boolean; minus?: boolean; sub?: string }) {
   return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-muted">{label}</dt>
-      <dd className="tnum">{value}</dd>
+    <div className={cx("grid grid-cols-[minmax(0,1fr)_auto_6rem] gap-x-2", strong && "text-[15px] font-bold")}>
+      <span>
+        {label}
+        {sub && <span className="block text-[13px] font-normal text-ink-2">{sub}</span>}
+      </span>
+      <span className="text-ink-2">Rp</span>
+      <span className="tnum text-right">
+        {minus ? "−" : ""}
+        {num(value)}
+      </span>
     </div>
   );
 }

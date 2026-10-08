@@ -257,7 +257,8 @@ export function receiptToken() {
   return s;
 }
 
-export function receiptFrom(saleId: string, sale: Sale): Receipt {
+/** `sessionAt`: each booking's start time, shown under its line on the receipt. */
+export function receiptFrom(saleId: string, sale: Sale, sessionAt: Map<string, number> = new Map()): Receipt {
   return {
     saleId,
     invoiceNo: sale.invoiceNo,
@@ -272,6 +273,7 @@ export function receiptFrom(saleId: string, sale: Sale): Receipt {
       voucher: !!i.voucherId,
       staffName: i.staffName ?? "",
       kind: i.kind,
+      at: i.bookingId ? (sessionAt.get(i.bookingId) ?? null) : null,
     })),
     subtotal: sale.subtotal,
     voucherCovered: sale.voucherCovered,
@@ -288,7 +290,12 @@ export function receiptFrom(saleId: string, sale: Sale): Receipt {
 export async function ensureReceipt(saleId: string, sale: Sale) {
   if (sale.receiptToken) return sale.receiptToken;
   const token = receiptToken();
-  await store.set("receipts", token, receiptFrom(saleId, sale));
+  const sessionAt = new Map<string, number>();
+  for (const id of new Set(sale.items.map((i) => i.bookingId).filter(Boolean) as string[])) {
+    const b = await store.get<Booking>("bookings", id);
+    if (b) sessionAt.set(id, b.startAt);
+  }
+  await store.set("receipts", token, receiptFrom(saleId, sale, sessionAt));
   await store.update("sales", saleId, { receiptToken: token });
   return token;
 }
@@ -325,9 +332,12 @@ export async function checkout(input: CheckoutInput) {
       vouchers.set(id, v);
     }
     const bookingIds = [...new Set(input.lines.map((l) => l.bookingId).filter(Boolean))] as string[];
+    // Also when each session took place, for the receipt.
+    const sessionAt = new Map<string, number>();
     for (const id of bookingIds) {
       const b = await tx.get<Booking>("bookings", id);
       if (b?.status === "paid") throw new Error("Booking ini sudah dibayar.");
+      if (b) sessionAt.set(id, b.startAt);
     }
 
     // ---- writes ----
@@ -459,7 +469,7 @@ export async function checkout(input: CheckoutInput) {
       createdByName: input.createdByName,
     };
     tx.set("sales", saleId, sale);
-    tx.set("receipts", token, receiptFrom(saleId, sale));
+    tx.set("receipts", token, receiptFrom(saleId, sale, sessionAt));
 
     for (const id of bookingIds) tx.update("bookings", id, { status: "paid", saleId, invoiceNo });
 
