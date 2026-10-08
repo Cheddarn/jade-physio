@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { getAuth, inMemoryPersistence, initializeAuth, type Auth } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import {
   initializeFirestore,
@@ -23,6 +23,7 @@ let _app: FirebaseApp | undefined;
 let _db: Firestore | undefined;
 let _auth: Auth | undefined;
 let _storage: FirebaseStorage | undefined;
+let _provision: Auth | undefined;
 
 export function firebaseApp() {
   if (!_app) _app = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -48,6 +49,22 @@ export function db() {
 export function auth() {
   if (!_auth) _auth = getAuth(firebaseApp());
   return _auth;
+}
+
+/**
+ * A second, in-memory app for the admin to create other people's logins.
+ * Creating an account signs in as it, and this keeps that away from the admin's own session.
+ */
+export function provisionAuth() {
+  if (!_provision) {
+    const app = getApps().find((a) => a.name === "provision") ?? initializeApp(firebaseConfig, "provision");
+    try {
+      _provision = initializeAuth(app, { persistence: inMemoryPersistence });
+    } catch {
+      _provision = getAuth(app);
+    }
+  }
+  return _provision;
 }
 
 export function storage() {

@@ -11,7 +11,7 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 | Menu | What it does |
 | --- | --- |
 | **Alur pasien** | The live walk-in board, and everyone's home screen. Front desk taps *Pasien datang* (patient gender, how many people need slippers, male/female therapist needed, short complaint). Cleaning service and the matching therapists get an alert right away. The board tracks each patient: shoes changed (with rack no.), registration form, therapist & bed, session, shoes returned. A **bed map** (*Denah*) laid out like the clinic (Ruang 1: beds 1-2 along the back wall, 3-5 in front of them; Ruang 2: beds 6-7) shows who is on which bed with which therapist. A 3D version exists but is switched off for now (`SHOW_3D` in `src/app/(app)/alur/page.tsx`). |
-| **Booking saya** (patients) | Patient portal. Patients sign up themselves (*Daftar → Pasien*), add the people on their account (name, phone, gender, relation), and book one or more of them at once, each with their own complaint and preferred physio. The front desk confirms; the patient sees the status live. |
+| **Booking saya** (patients) | Patient portal. Patients sign in with their phone number and an SMS code; a new number just adds a name (email optional) to make the account. They add the people on their account (name, phone, gender, relation), and book one or more of them at once, each with their own complaint and preferred physio. The front desk confirms; the patient sees the status live. |
 | **Laporan terapi** | Physios must write a report for every finished session (alert + red badge until done): complaint, findings, treatment, home advice, next visit, plus an optional PDF/JPG/PNG upload. Front desk downloads it, opens a printable PDF, or sends it by WhatsApp (summary + PDF link). *Salin daftar pasien* copies today's patient list as text. |
 | **Jadwal kerja** | Clock in / *Pulang* for every staff member (sidebar and *Lainnya*), with the exact time (hour and minute) in and out and hours worked ("8 jam 12 menit"). Managers see a daily table (shift, masuk, pulang, lama kerja, status), can correct a wrong or forgotten clock-out (overtime is recalculated), and download the month as CSV for payroll. Each person's shift per weekday; time past the shift end counts as overtime (5 min grace), shown live and confirmed at *Pulang* with an optional note. Monthly overtime summary. Clinic opening hours per weekday. |
 | **Restock** | Any staff member requests an item (qty, unit, category, urgent, note). Listed per day, grouped by month, with the status *Diajukan → Menunggu barang → Diterima*. The manager taps *Proses*: corrects the name, quantity and unit, enters the total price, and confirms the order. Whoever is there when it arrives taps *Barang datang*. Prices are only visible to the manager (they are stored as costs for *Laba & biaya*). *Salin daftar belanja* (manager) merges requested items into a shopping list. |
@@ -82,7 +82,9 @@ The same rules are enforced server-side in `firestore.rules`, so the menu hiding
    ```
 2. **Firebase config** is already in `.env.local` (project `jade-physio`).
 3. In the [Firebase console](https://console.firebase.google.com/project/jade-physio):
-   - *Authentication → Sign-in method*: enable **Email/Password**.
+   - *Authentication → Sign-in method*: enable **Email/Password** (staff) and **Phone** (patients).
+   - *Authentication → Settings → Authorized domains*: add your site's domain (e.g. `jade-physio.vercel.app`), or phone sign-in is refused there.
+   - Real SMS may need the **Blaze** (pay-as-you-go) plan. To try phone sign-in without sending SMS, add a number under *Phone numbers for testing*.
    - *Firestore Database*: create the database (production mode, region `asia-southeast2` Jakarta recommended).
 4. **Deploy the security rules** (once, and again whenever the rules change, **including after this update**, which adds reminders (`memos`), manager-only costs (`expenses`), the restock order steps, and treats old Front desk accounts as Admin):
    ```bash
@@ -97,10 +99,11 @@ The same rules are enforced server-side in `firestore.rules`, so the menu hiding
    ```bash
    npm run dev      # http://localhost:3000
    ```
-6. Open the app and click **Daftar**. **The first account ever created becomes the admin.**
+6. Open the app. On a brand-new project it asks for the first account, which **becomes the admin**.
    On the empty calendar, *Isi contoh awal* adds sample therapists, services and packages, which you can then edit in Katalog.
-7. Add everyone else in **Terapis & akses → Akses login**: enter their email, pick a role (and for a therapist, their calendar column).
-   They then open the app, choose **Daftar**, and create a password with that same email.
+7. Make everyone else's login in **Terapis & akses → Akses login → Tambah**: email, role (and for a therapist, their calendar column) and an initial password (one is generated).
+   The account works right away: tap *Salin info masuk* and send it to them. They can set their own password with **Lupa kata sandi?** on the login page (Firebase emails the link).
+   Only patients sign up themselves; staff and clinic accounts are always made by the admin.
 
 ## Moving from Zenwel
 

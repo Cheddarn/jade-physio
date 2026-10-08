@@ -14,11 +14,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
 
+  // A phone number that was verified but never finished registering goes back to the login page to finish.
+  const unregisteredPatient = state.status === "no_access" && state.user.email.startsWith("+");
   useEffect(() => {
-    if (state.status === "signed_out") router.replace("/login");
-  }, [state.status, router]);
+    if (state.status === "signed_out" || unregisteredPatient) router.replace("/login");
+  }, [state.status, unregisteredPatient, router]);
 
-  if (state.status === "loading" || state.status === "signed_out") return <Spinner className="min-h-dvh" />;
+  if (state.status === "loading" || state.status === "signed_out" || unregisteredPatient) return <Spinner className="min-h-dvh" />;
 
   if (state.status === "no_access")
     return (

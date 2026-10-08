@@ -424,9 +424,11 @@ export interface PortalPerson {
   note?: string;
 }
 
-/** A patient login. Doc id = email. */
+/** A patient login. Doc id = the phone number (+62...) for patients who sign in by SMS, else the email. */
 export interface PortalAccount {
   name: string;
+  /** Optional contact email; patients sign in with their phone number. */
+  email?: string | null;
   persons: PortalPerson[];
   createdAt: number;
 }

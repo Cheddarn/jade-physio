@@ -9,14 +9,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null && request.auth.token.email != null;
+    // Who is asking: the email for staff (and older accounts), the phone number (+62...) for patients who sign in by SMS.
+    // access/ and accounts/ docs are keyed by the same value.
+    function myId() {
+      return request.auth.token.get('email', null) != null
+        ? request.auth.token.email.lower()
+        : request.auth.token.get('phone_number', '');
     }
-    function myEmail() {
-      return request.auth.token.email.lower();
+    function signedIn() {
+      return request.auth != null && myId() != '';
     }
     function accessPath() {
-      return /databases/$(database)/documents/access/$(myEmail());
+      return /databases/$(database)/documents/access/$(myId());
     }
     function member() {
       return signedIn() && exists(accessPath());
@@ -69,24 +73,24 @@ service cloud.firestore {
 
     // ---------- access list ----------
     match /access/{email} {
-      allow read: if signedIn() && (myEmail() == email || isAdmin());
+      allow read: if signedIn() && (myId() == email || isAdmin());
       // Admins add people. The very first account may add itself as admin once,
       // in the same batch that creates meta/setup.
       allow create: if isAdmin()
-        || (signedIn() && myEmail() == email && !setupDone()
+        || (signedIn() && myId() == email && !setupDone()
             && existsAfter(/databases/$(database)/documents/meta/setup)
             && request.resource.data.role == 'admin')
         // Patients sign up themselves, as patients only.
-        || (signedIn() && myEmail() == email && setupDone()
+        || (signedIn() && myId() == email && setupDone()
             && request.resource.data.role == 'patient');
       // Nobody can change or remove their own access.
-      allow update, delete: if isAdmin() && myEmail() != email;
+      allow update, delete: if isAdmin() && myId() != email;
     }
 
     match /meta/setup {
       allow read: if true;
       allow create: if signedIn() && !setupDone()
-        && existsAfter(/databases/$(database)/documents/access/$(myEmail()));
+        && existsAfter(/databases/$(database)/documents/access/$(myId()));
       allow update, delete: if false;
     }
 
@@ -109,19 +113,19 @@ service cloud.firestore {
 
     // Doc id = email_YYYY-MM-DD. Everyone clocks themselves in and out.
     match /attendance/{id} {
-      allow read: if isManager() || (staffRole() && (resource == null || resource.data.email == myEmail()));
+      allow read: if isManager() || (staffRole() && (resource == null || resource.data.email == myId()));
       allow create: if staffRole()
-        && request.resource.data.email == myEmail()
-        && id == myEmail() + '_' + request.resource.data.dateKey;
+        && request.resource.data.email == myId()
+        && id == myId() + '_' + request.resource.data.dateKey;
       allow update: if isManager()
-        || (resource.data.email == myEmail() && onlyChanged(['outAt', 'overtimeMin', 'closing', 'note']));
+        || (resource.data.email == myId() && onlyChanged(['outAt', 'overtimeMin', 'closing', 'note']));
       allow delete: if isManager();
     }
 
     // ---------- restock requests ----------
     match /restock/{id} {
       allow read: if staffRole();
-      allow create: if staffRole() && request.resource.data.createdBy == myEmail()
+      allow create: if staffRole() && request.resource.data.createdBy == myId()
         && request.resource.data.done == false && request.resource.data.status == 'requested';
       // The manager orders (name, quantity, status). Anyone at the clinic confirms an ordered item arrived, or undoes that.
       // Whoever asked may still change or withdraw their request until it is ordered.
@@ -129,11 +133,11 @@ service cloud.firestore {
         || (staffRole() && onlyChanged(['status', 'done', 'doneAt', 'doneBy', 'doneByName'])
             && resource.data.get('status', 'requested') in ['ordered', 'received']
             && request.resource.data.status in ['ordered', 'received'])
-        || (resource.data.createdBy == myEmail() && resource.data.done == false
+        || (resource.data.createdBy == myId() && resource.data.done == false
             && resource.data.get('status', 'requested') == 'requested'
             && request.resource.data.get('status', 'requested') == 'requested');
       allow delete: if managerOnly()
-        || (resource.data.createdBy == myEmail() && resource.data.done == false
+        || (resource.data.createdBy == myId() && resource.data.done == false
             && resource.data.get('status', 'requested') == 'requested');
     }
 
@@ -153,8 +157,8 @@ service cloud.firestore {
 
     // ---------- patient portal ----------
     match /accounts/{email} {
-      allow read: if (signedIn() && myEmail() == email) || isDesk();
-      allow write: if signedIn() && myEmail() == email;
+      allow read: if (signedIn() && myId() == email) || isDesk();
+      allow write: if signedIn() && myId() == email;
     }
 
     // The desk's own dated reminders (Pengingat).
@@ -163,13 +167,13 @@ service cloud.firestore {
     }
 
     match /requests/{id} {
-      allow read: if isDesk() || (isPatient() && resource.data.accountEmail == myEmail());
+      allow read: if isDesk() || (isPatient() && resource.data.accountEmail == myId());
       allow create: if isPatient()
-        && request.resource.data.accountEmail == myEmail()
+        && request.resource.data.accountEmail == myId()
         && request.resource.data.status == 'pending';
       // The desk confirms or rejects; the patient may only cancel while it's pending.
       allow update: if isDesk()
-        || (isPatient() && resource.data.accountEmail == myEmail()
+        || (isPatient() && resource.data.accountEmail == myId()
             && resource.data.status == 'pending'
             && request.resource.data.status == 'cancelled'
             && onlyChanged(['status']));

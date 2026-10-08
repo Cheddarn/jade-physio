@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Avatar, Badge, Button, Card, Confirm, Field, Input, Select, Sheet, Spinner, cx, errorText, useToast } from "./ui";
-import { useUser } from "@/lib/auth";
+import { authErrorMessage, createLogin, sendPasswordReset, useUser } from "@/lib/auth";
 import { ROLES, ROLE_HINT, ROLE_LABEL, normalizeRole, type Role } from "@/lib/roles";
 import { shortDate, staffColor } from "@/lib/format";
 import { store, type Row } from "@/lib/store";
@@ -122,6 +122,25 @@ export function AccessList({ staff, rows }: { staff: Row<Staff>[]; rows: Row<Acc
   );
 }
 
+const PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Easy to read out or type: no 0/O or 1/l/I. */
+function newPassword(length = 10) {
+  return Array.from(crypto.getRandomValues(new Uint8Array(length)), (b) => PASSWORD_CHARS[b % PASSWORD_CHARS.length]).join("");
+}
+
+/** What to hand the new person, ready to paste into WhatsApp. */
+function loginText(name: string, email: string, password: string) {
+  return [
+    `Akun Jade Physio untuk ${name}`,
+    `Masuk di: ${window.location.origin}/login`,
+    `Email: ${email}`,
+    `Kata sandi: ${password}`,
+    "",
+    "Kata sandi bisa diganti kapan saja lewat \"Lupa kata sandi?\" di halaman masuk.",
+  ].join("\n");
+}
+
 function AccessSheet({
   value,
   staff,
@@ -139,20 +158,27 @@ function AccessSheet({
   // New logins start with no role, so nobody gets full Admin access by accident.
   const [role, setRole] = useState<Role | null>(null);
   const [staffId, setStaffId] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  // After creating: the login to hand over (password null when the email already had one).
+  const [done, setDone] = useState<{ name: string; email: string; password: string | null } | null>(null);
   const [openedFor, setOpenedFor] = useState<unknown>(null);
   if (value !== openedFor) {
     setOpenedFor(value);
+    setDone(null);
     if (value === "new") {
       setEmail("");
       setName("");
       setRole(null);
       setStaffId("");
+      setPassword(newPassword());
     } else if (value) {
       setEmail(value.id);
       setName(value.name);
       setRole(value.role);
       setStaffId(value.staffId ?? "");
+      setPassword("");
     }
   }
   const isNew = value === "new";
@@ -167,41 +193,115 @@ function AccessSheet({
     if (s && !name.trim()) setName(s.name);
   }
 
+  async function save() {
+    if (!role) return;
+    setBusy(true);
+    try {
+      const doc: Access = {
+        role,
+        name: name.trim(),
+        addedAt: isNew ? Date.now() : (value as Row<Access>).addedAt,
+        ...(role === "therapist" ? { staffId } : {}),
+      };
+      // The login first: if it cannot be made, nobody is added to the list.
+      const login = isNew ? await createLogin(mail, password, doc.name || mail) : null;
+      await store.set("access", mail, doc);
+      // Keep the team directory (shifts, sellers) in step with logins.
+      if (STAFF_ROLES.includes(role)) await saveTeamMember(mail, { name: doc.name || mail, role, staffId: doc.staffId ?? "", active: true });
+      if (isNew) setDone({ name: doc.name || mail, email: mail, password: login === "created" ? password : null });
+      else {
+        toast("Akses diperbarui");
+        onClose();
+      }
+    } catch (e) {
+      toast((e as { code?: string })?.code?.startsWith("auth/") ? authErrorMessage(e) : errorText(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLogin() {
+    if (!done?.password) return;
+    const text = loginText(done.name, done.email, done.password);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Info masuk disalin");
+    } catch {
+      window.prompt("Salin info masuk:", text);
+    }
+  }
+
+  async function reset() {
+    setResetting(true);
+    try {
+      await sendPasswordReset(mail);
+      toast(`Link atur ulang kata sandi dikirim ke ${mail}`);
+    } catch (e) {
+      toast(authErrorMessage(e), "error");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  if (done)
+    return (
+      <Sheet
+        open={!!value}
+        onClose={onClose}
+        title="Akun siap"
+        footer={
+          <div className="flex gap-2">
+            {done.password && (
+              <Button variant="secondary" size="lg" icon={<Copy className="size-4" />} onClick={copyLogin} className="flex-1">
+                Salin info masuk
+              </Button>
+            )}
+            <Button size="lg" onClick={onClose} className="flex-1">
+              Selesai
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3 rounded-xl bg-jade-mist px-4 py-3 text-sm text-jade-deep">
+            <CheckCircle2 className="size-5 shrink-0" />
+            <p>
+              <span className="font-semibold">{done.name}</span> sudah bisa masuk sebagai {role ? ROLE_LABEL[role] : "staf"}.
+            </p>
+          </div>
+          <dl className="divide-y divide-line-soft rounded-xl border border-line text-sm">
+            <div className="flex justify-between gap-3 px-4 py-3">
+              <dt className="text-muted">Email</dt>
+              <dd className="font-semibold break-all">{done.email}</dd>
+            </div>
+            <div className="flex justify-between gap-3 px-4 py-3">
+              <dt className="text-muted">Kata sandi</dt>
+              <dd className="font-mono font-semibold">{done.password ?? "Tidak diubah"}</dd>
+            </div>
+          </dl>
+          <p className="text-[13px] text-muted">
+            {done.password
+              ? "Kirim info masuk ini ke orangnya. Kata sandinya bisa ia ganti lewat Lupa kata sandi? di halaman masuk."
+              : "Email ini sudah punya akun login, jadi kata sandinya tetap yang lama. Kalau lupa, ia bisa memakai Lupa kata sandi? di halaman masuk."}
+          </p>
+        </div>
+      </Sheet>
+    );
+
   return (
     <Sheet
       open={!!value}
       onClose={onClose}
-      title={isNew ? "Tambah akses login" : "Ubah akses"}
+      title={isNew ? "Buat akun login" : "Ubah akses"}
       footer={
         <Button
           size="lg"
           block
           loading={busy}
-          disabled={!validEmail || taken || !role || (role === "therapist" && !staffId)}
-          onClick={async () => {
-            if (!role) return;
-            setBusy(true);
-            try {
-              const doc: Access = {
-                role,
-                name: name.trim(),
-                addedAt: isNew ? Date.now() : (value as Row<Access>).addedAt,
-                ...(role === "therapist" ? { staffId } : {}),
-              };
-              await store.set("access", mail, doc);
-              // Keep the team directory (shifts, sellers) in step with logins.
-              if (STAFF_ROLES.includes(role))
-                await saveTeamMember(mail, { name: doc.name || mail, role, staffId: doc.staffId ?? "", active: true });
-              toast(isNew ? `${mail} ditambahkan sebagai ${ROLE_LABEL[role]}` : "Akses diperbarui");
-              onClose();
-            } catch (e) {
-              toast(errorText(e), "error");
-            } finally {
-              setBusy(false);
-            }
-          }}
+          disabled={!validEmail || taken || !role || (role === "therapist" && !staffId) || (isNew && password.length < 6)}
+          onClick={save}
         >
-          {isNew ? "Beri akses" : "Simpan"}
+          {isNew ? "Buat akun" : "Simpan"}
         </Button>
       }
     >
@@ -266,13 +366,35 @@ function AccessSheet({
         </Field>
 
         {isNew && (
+          <Field label="Kata sandi awal" htmlFor="ac-password" hint="Minimal 6 karakter. Orangnya bisa menggantinya nanti.">
+            <div className="flex gap-2">
+              <Input
+                id="ac-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+              <Button variant="secondary" icon={<RefreshCw className="size-4" />} onClick={() => setPassword(newPassword())} className="shrink-0">
+                Buat baru
+              </Button>
+            </div>
+          </Field>
+        )}
+
+        {isNew && (
           <p className="rounded-xl bg-canvas px-4 py-3 text-sm text-ink-2">
-            Setelah ditambahkan, orang ini membuka halaman masuk, memilih Daftar, lalu membuat kata sandi dengan email yang
-            sama.
+            Akun langsung aktif. Setelah dibuat, salin info masuknya dan kirim ke orangnya.
           </p>
         )}
         {!isNew && value && (
-          <p className="text-[13px] text-muted">Ditambahkan {shortDate((value as Row<Access>).addedAt)}.</p>
+          <div className="flex flex-col gap-3 border-t border-line-soft pt-5">
+            <Button variant="secondary" icon={<KeyRound className="size-4" />} loading={resetting} onClick={reset}>
+              Kirim email atur ulang kata sandi
+            </Button>
+            <p className="text-[13px] text-muted">Ditambahkan {shortDate((value as Row<Access>).addedAt)}.</p>
+          </div>
         )}
       </div>
     </Sheet>

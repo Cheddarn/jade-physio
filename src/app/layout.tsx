@@ -5,8 +5,8 @@ import { AuthProvider } from "@/lib/auth";
 import { ToastProvider } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Jade Physio — Kasir & Jadwal",
-  description: "Booking, checkout, voucher sesi, dan laporan penjualan Jade Physio",
+  title: "Jade Physio",
+  description: "Booking sesi, jadwal terapi, dan administrasi klinik fisioterapi Jade Physio",
 };
 
 export const viewport: Viewport = {

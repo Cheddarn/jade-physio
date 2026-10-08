@@ -16,7 +16,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Loader2, X, AlertCircle } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, X, AlertCircle } from "lucide-react";
 import { initials } from "@/lib/format";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -127,6 +127,25 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 ) {
   return <input ref={ref} className={cx(inputBase, "h-11 md:h-10", className)} {...rest} />;
 });
+
+/** Password field with a button to show what was typed. */
+export function PasswordInput({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className={cx("relative", className)}>
+      <input type={shown ? "text" : "password"} className={cx(inputBase, "h-11 pr-11 md:h-10")} {...rest} />
+      <button
+        type="button"
+        onClick={() => setShown((s) => !s)}
+        aria-label={shown ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+        aria-pressed={shown}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-[10px] text-muted hover:text-ink"
+      >
+        {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+}
 
 export function MoneyInput({
   value,
