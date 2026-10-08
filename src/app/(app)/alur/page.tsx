@@ -25,6 +25,8 @@ const BedMap3D = dynamic(() => import("@/components/BedMap3D"), {
 const MAP_KEY = "jade-physio-map";
 /** The 3D bed map is hidden for now; set to true to bring back the 3D / Denah switch. */
 const SHOW_3D = false;
+/** The bed map (Denah) is hidden for now; set to true to show it on Alur pasien again. */
+const SHOW_BED_MAP = false;
 
 export default function AlurPage() {
   const user = useUser();
@@ -128,41 +130,43 @@ export default function AlurPage() {
           <MyTasks role={user.role} tasks={tasks} visits={visits} now={now} onOpen={setSelectedId} onAssign={setAssignId} onForm={() => {}} />
         )}
 
-        <Card className="overflow-hidden">
-          {/* Phones hide the legend, so without the 3D switch this bar would be empty there. */}
-          <div className={cx(SHOW_3D ? "flex" : "hidden sm:flex", "items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5")}>
-            <div className="flex min-w-0 items-center gap-3 text-[12px] text-muted">
-              <Legend color="#e4e8ee" label="Kosong" />
-              <Legend color="#f6dfa8" label="Menunggu" />
-              <Legend color="var(--color-jade-bead)" label="Sesi (warna terapis)" />
+        {SHOW_BED_MAP && (
+          <Card className="overflow-hidden">
+            {/* Phones hide the legend, so without the 3D switch this bar would be empty there. */}
+            <div className={cx(SHOW_3D ? "flex" : "hidden sm:flex", "items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5")}>
+              <div className="flex min-w-0 items-center gap-3 text-[12px] text-muted">
+                <Legend color="#e4e8ee" label="Kosong" />
+                <Legend color="#f6dfa8" label="Menunggu" />
+                <Legend color="var(--color-jade-bead)" label="Sesi (warna terapis)" />
+              </div>
+              {SHOW_3D && (
+                <Segmented
+                  size="sm"
+                  value={mapMode}
+                  onChange={setMapMode}
+                  options={[
+                    { value: "3d", label: <span className="inline-flex items-center gap-1"><Box className="size-3.5" />3D</span> },
+                    { value: "plan", label: <span className="inline-flex items-center gap-1"><LayoutGrid className="size-3.5" />Denah</span> },
+                  ]}
+                />
+              )}
             </div>
-            {SHOW_3D && (
-              <Segmented
-                size="sm"
-                value={mapMode}
-                onChange={setMapMode}
-                options={[
-                  { value: "3d", label: <span className="inline-flex items-center gap-1"><Box className="size-3.5" />3D</span> },
-                  { value: "plan", label: <span className="inline-flex items-center gap-1"><LayoutGrid className="size-3.5" />Denah</span> },
-                ]}
-              />
+            <div className={cx(mapMode === "3d" && "h-[360px] md:h-[520px]", "bg-gradient-to-b from-[#eef4f1] to-surface")}>
+              {rows === null ? (
+                <Spinner className="h-full" />
+              ) : mapMode === "3d" ? (
+                <BedMap3D occupancy={occupancy} staff={staff} now={now} onPick={pickBed} compact={!isDesktop} />
+              ) : (
+                <BedPlan occupancy={occupancy} staff={staff} now={now} onPick={pickBed} />
+              )}
+            </div>
+            {mapMode === "3d" && (
+              <p className="border-t border-line-soft px-4 py-2 text-[12px] text-muted">
+                Geser untuk memutar, cubit atau scroll untuk zoom. Ketuk bed untuk detail{desk ? ", atau bed kosong untuk menempatkan pasien berikutnya" : ""}.
+              </p>
             )}
-          </div>
-          <div className={cx(mapMode === "3d" && "h-[360px] md:h-[520px]", "bg-gradient-to-b from-[#eef4f1] to-surface")}>
-            {rows === null ? (
-              <Spinner className="h-full" />
-            ) : mapMode === "3d" ? (
-              <BedMap3D occupancy={occupancy} staff={staff} now={now} onPick={pickBed} compact={!isDesktop} />
-            ) : (
-              <BedPlan occupancy={occupancy} staff={staff} now={now} onPick={pickBed} />
-            )}
-          </div>
-          {mapMode === "3d" && (
-            <p className="border-t border-line-soft px-4 py-2 text-[12px] text-muted">
-              Geser untuk memutar, cubit atau scroll untuk zoom. Ketuk bed untuk detail{desk ? ", atau bed kosong untuk menempatkan pasien berikutnya" : ""}.
-            </p>
-          )}
-        </Card>
+          </Card>
+        )}
 
         {user.role !== "cleaning" &&
           (rows === null ? (
