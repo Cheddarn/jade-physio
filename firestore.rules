@@ -167,7 +167,10 @@ service cloud.firestore {
     }
 
     match /requests/{id} {
-      allow read: if isDesk() || (isPatient() && resource.data.accountEmail == myId());
+      allow read: if isDesk()
+        || (isPatient() && resource.data.accountEmail == myId())
+        // A physio sees the requests that ask for them, so they know who wants to come.
+        || (isTherapist() && resource.data.staffId == myStaffId());
       allow create: if isPatient()
         && request.resource.data.accountEmail == myId()
         && request.resource.data.status == 'pending';

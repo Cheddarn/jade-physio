@@ -162,7 +162,7 @@ export function tasksFor(
         });
       if (mine && readyForSession(v))
         push({ id: `${v.id}:ready`, visitId: v.id, title: "Pasien siap masuk", body: `${v.customerName}, ${bedLabel(v.bedId)}` });
-      if (!v.staffId && v.stage === "waiting" && (!v.therapistGender || v.therapistGender === me?.gender))
+      if (!v.staffId && v.stage === "waiting" && (!v.therapistGender || !me?.gender || v.therapistGender === me.gender))
         push({
           id: `${v.id}:incoming`,
           visitId: v.id,

@@ -69,6 +69,17 @@ On the board the family shares a coloured tag ("Istri Joko Susilo"), the bed pic
 Every patient profile has a **Keluarga & kerabat** graph: the patient in the middle, relatives around with the relation on each line, and their relatives one step further out. An orange dot marks who is in the clinic right now. Tap anyone to open their profile; *Hubungkan* links two patients by hand.
 
 Alerts: a chime, a pop-up, a vibration on phones, the count on the *Alur pasien* menu and in the browser tab, and a system notification when the tab is in the background (tap *Izinkan notifikasi* once on each device). Keep the app open on each staff phone or PC.
+Sound starts after the first tap on the page (a browser rule); until then staff see *Ketuk layar sekali untuk menyalakan suara notifikasi*. What is already waiting when the app opens stays quiet; only what comes after pings.
+
+| Who | Gets |
+|---|---|
+| Front desk (admin) | *Permintaan booking dari pasien*, *Pasien menunggu formulir*, *Sesi selesai, siap checkout*, dated reminders and the hourly routine |
+| Therapist | *Pasien minta booking dengan Anda*, *Booking baru untuk Anda* (made at the desk or a request confirmed, also when moved), *Pasien datang* (no therapist yet, matching gender), *Pasien baru untuk Anda* with the bed, *Pasien siap masuk*, *Buat laporan terapi* |
+| Cleaning service | *Ganti sepatu pasien*, *Kembalikan sepatu* |
+| Manager | the front desk's alerts except the hourly routine, plus *Permintaan restock* / *Restock urgent* |
+| Patient (portal) | *Booking dikonfirmasi*, *Permintaan booking ditolak* |
+
+Phones show system notifications through a small service worker (`public/sw.js`). Alerts reach a device only while the app is open on it (also in a background tab); a phone that has closed the app or locked the screen for long gets nothing until it is opened again.
 
 Give each therapist a gender in **Terapis & akses** so the right ones are called.
 

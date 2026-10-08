@@ -8,12 +8,20 @@ import { dateKey, shortDate, time } from "@/lib/format";
 import { tasksFor, type Task, type VisitRow } from "@/lib/flow";
 import { isRoutineSeenKey, lastRoutineAt, readRoutineSeen, useDueMemos, writeRoutineSeen } from "@/lib/memos";
 import { hoursOn, useSettings } from "@/lib/settings";
+import { restockStatus } from "@/lib/restock";
 import type { Row } from "@/lib/store";
-import type { Booking, BookingRequest, Memo, Routine, TherapyReport, Visit } from "@/lib/types";
+import type { Booking, BookingRequest, Memo, RestockItem, Routine, TherapyReport, Visit } from "@/lib/types";
 import { useToast } from "./ui";
 
+/** Something worth a ping that is not a to-do: a new booking for a physio, an answer to a patient's request. */
+interface Notice {
+  id: string;
+  title: string;
+  body: string;
+}
+
 interface AlertsApi {
-  /** Everything that pings: patient flow, missing reports, booking requests. */
+  /** To-dos that ping and are counted: patient flow, missing reports, booking requests, restock, reminders. */
   tasks: Task[];
   visits: VisitRow[] | null;
   /** Red counts on menu items, by link. */
@@ -48,11 +56,23 @@ export const useFlowAlerts = () => useContext(Ctx);
 
 const SOUND_KEY = "jade-physio-sound";
 
+// One audio context for the app. Browsers keep it silent until the page has been tapped once,
+// so the provider resumes it on the first tap or key press.
+let audio: AudioContext | null = null;
+function audioContext() {
+  if (!audio) {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AC) audio = new AC();
+  }
+  return audio;
+}
+
 /** Two-tone chime, no audio file needed. */
 function chime() {
   try {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AC();
+    const ctx = audioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume().catch(() => {});
     [880, 1320].forEach((f, i) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -66,9 +86,24 @@ function chime() {
       o.start(t);
       o.stop(t + 0.55);
     });
-    setTimeout(() => ctx.close(), 1200);
   } catch {
     /* audio blocked until the first tap: the toast still shows */
+  }
+}
+
+/** A system notification. Android Chrome only shows them through a service worker (public/sw.js); desktop takes either. */
+async function systemNotify(title: string, body: string, tag: string) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) return void (await reg.showNotification(title, { body, tag, icon: "/logo.png" }));
+  } catch {
+    /* try the plain way below */
+  }
+  try {
+    new Notification(title, { body, tag, icon: "/logo.png" });
+  } catch {
+    /* nothing more to do: the toast and the chime already went */
   }
 }
 
@@ -109,6 +144,69 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
             body: `${b.customerName}, ${b.serviceName}`,
           })),
     [missing, visits, user.role],
+  );
+
+  // Physios: a new booking with them (made at the desk, or a patient's request confirmed), and patients asking for them.
+  const therapist = user.role === "therapist" && !!user.staffId;
+  const { rows: ahead } = useCollection<Booking>(therapist ? "bookings" : null, [["dateKey", ">=", today]]);
+  const { rows: askedForMe } = useCollection<BookingRequest>(therapist ? "requests" : null, [
+    ["status", "==", "pending"],
+    ["staffId", "==", user.staffId ?? ""],
+  ]);
+  const therapistNotices = useMemo<Notice[]>(() => {
+    if (!therapist) return [];
+    // A walk-in already gets "Pasien baru untuk Anda"; its booking is not news.
+    const walkIns = new Set((visits ?? []).map((v) => v.bookingId).filter(Boolean));
+    return [
+      ...(ahead ?? [])
+        .filter((b) => b.staffId === user.staffId && b.status === "booked" && !walkIns.has(b.id))
+        .map((b) => ({
+          id: `booking:${b.id}:${b.startAt}`,
+          title: "Booking baru untuk Anda",
+          body: `${b.customerName}, ${shortDate(b.startAt)} ${time(b.startAt)}, ${b.serviceName}`,
+        })),
+      ...(askedForMe ?? []).map((r) => ({
+        id: `asked:${r.id}`,
+        title: "Pasien minta booking dengan Anda",
+        body: `${r.personName}, ${shortDate(r.startAt)} ${time(r.startAt)}. Menunggu konfirmasi admin.`,
+      })),
+    ];
+  }, [therapist, ahead, askedForMe, visits, user.staffId]);
+
+  // Patients: the clinic answered a booking request.
+  const patient = user.role === "patient";
+  const { rows: myRequests } = useCollection<BookingRequest>(patient ? "requests" : null, [["accountEmail", "==", user.email]]);
+  const patientNotices = useMemo<Notice[]>(
+    () =>
+      (myRequests ?? []).flatMap((r) => {
+        const at = r.confirmedStartAt ?? r.startAt;
+        if (r.status === "confirmed")
+          return [{
+            id: `answer:${r.id}:confirmed`,
+            title: "Booking dikonfirmasi",
+            body: `${r.personName}, ${shortDate(at)} ${time(at)}${r.confirmedStaffName ? ` dengan ${r.confirmedStaffName}` : ""}`,
+          }];
+        if (r.status === "rejected")
+          return [{ id: `answer:${r.id}:rejected`, title: "Permintaan booking ditolak", body: `${r.personName}${r.reason ? `: ${r.reason}` : ""}` }];
+        return [];
+      }),
+    [myRequests],
+  );
+
+  // The manager orders what staff ask for.
+  const buyer = canRole(user.role, "restock.manage");
+  const { rows: openRestock } = useCollection<RestockItem>(buyer ? "restock" : null, [["done", "==", false]]);
+  const restockTasks = useMemo<Task[]>(
+    () =>
+      (openRestock ?? [])
+        .filter((r) => restockStatus(r) === "requested")
+        .map((r) => ({
+          id: `restock:${r.id}`,
+          visitId: "",
+          title: r.urgent ? "Restock urgent" : "Permintaan restock",
+          body: `${r.item}, ${r.qty} ${r.unit} (${r.createdByName})`,
+        })),
+    [openRestock],
   );
 
   // Patients booking from the portal: the front desk confirms.
@@ -165,8 +263,12 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   );
 
   const tasks = useMemo(
-    () => [...flowTasks, ...reportTasks, ...requestTasks, ...reminderTasks],
-    [flowTasks, reportTasks, requestTasks, reminderTasks],
+    () => [...flowTasks, ...reportTasks, ...requestTasks, ...restockTasks, ...reminderTasks],
+    [flowTasks, reportTasks, requestTasks, restockTasks, reminderTasks],
+  );
+  const alerts = useMemo<(Task | Notice)[]>(
+    () => [...tasks, ...therapistNotices, ...patientNotices],
+    [tasks, therapistNotices, patientNotices],
   );
   const badges = useMemo(
     () => ({
@@ -174,8 +276,9 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
       "/laporan-terapi": missing.length,
       "/kalender": requests?.length ?? 0,
       "/pengingat": memos.length + routines.length,
+      "/restock": restockTasks.length,
     }),
-    [flowTasks, reportTasks, missing, requests, memos, routines],
+    [flowTasks, reportTasks, missing, requests, memos, routines, restockTasks],
   );
 
 
@@ -203,43 +306,79 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
     Notification.requestPermission().then((p) => setNotifyAllowed(p === "granted"));
   }, []);
 
-  // Alert only for tasks that appear after the first load, once each.
+  // Sound only plays once the page has been tapped; until then staff see a hint, and the first tap turns it on.
+  const [audioLocked, setAudioLocked] = useState(false);
+  useEffect(() => {
+    if (!(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive) setAudioLocked(true);
+    const unlock = () => {
+      setAudioLocked(false);
+      try {
+        void audioContext()?.resume();
+      } catch {
+        /* no audio here */
+      }
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  // Phones need a service worker to show notifications.
+  useEffect(() => {
+    navigator.serviceWorker?.register("/sw.js").catch(() => {});
+  }, []);
+
+  // Wait for everything that pings, so what is already there on load stays quiet.
+  const ready =
+    (!isStaffRole(user.role) || visits !== null) &&
+    (!clinical || (bookings !== null && reportRows !== null)) &&
+    (!desk || requests !== null) &&
+    (!therapist || (ahead !== null && askedForMe !== null)) &&
+    (!patient || myRequests !== null) &&
+    (!buyer || openRestock !== null) &&
+    (!memoDesk || memosLoaded) &&
+    routineSeen !== null;
+
+  // Alert only for what appears after the first load, once each. A short pause lets related writes land
+  // (a walk-in's booking and its visit), so one change gives one alert.
   const seen = useRef<Set<string> | null>(null);
   const soundRef = useRef(sound);
   soundRef.current = sound;
+  const latest = useRef(alerts);
+  latest.current = alerts;
   useEffect(() => {
-    // Wait for everything that pings, so what is already there on load stays quiet.
-    if (!visits || (memoDesk && !memosLoaded) || !routineSeen) return;
-    if (!seen.current) {
-      seen.current = new Set(tasks.map((t) => t.id));
-      return;
-    }
-    const fresh = tasks.filter((t) => !seen.current!.has(t.id));
-    tasks.forEach((t) => seen.current!.add(t.id));
-    if (!fresh.length) return;
-    if (soundRef.current) chime();
-    // Browsers only allow vibration after the person has tapped the page once.
-    if ((navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive)
-      navigator.vibrate?.([120, 80, 120]);
-    // A family checking in together gives one alert per step, not one per person.
-    const merged = new Map<string, Task>();
-    for (const t of fresh) {
-      const key = t.groupId ? `${t.groupId}|${t.title}` : t.id;
-      const prev = merged.get(key);
-      merged.set(key, prev ? { ...prev, body: `${prev.body}; ${t.body}` } : t);
-    }
-    for (const t of merged.values()) {
-      // Reminders have their own popup until confirmed; they only chime and notify.
-      if (!/^(memo|routine):/.test(t.id)) toast(`${t.title}: ${t.body}`);
-      if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
-        try {
-          new Notification(t.title, { body: t.body, tag: t.id });
-        } catch {
-          /* some mobile browsers only allow notifications from a service worker */
-        }
+    if (!ready) return;
+    const timer = setTimeout(() => {
+      const list = latest.current;
+      if (!seen.current) {
+        seen.current = new Set(list.map((t) => t.id));
+        return;
       }
-    }
-  }, [tasks, visits, memoDesk, memosLoaded, routineSeen, toast]);
+      const fresh = list.filter((t) => !seen.current!.has(t.id));
+      list.forEach((t) => seen.current!.add(t.id));
+      if (!fresh.length) return;
+      if (soundRef.current) chime();
+      // Browsers only allow vibration after the person has tapped the page once.
+      if ((navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive)
+        navigator.vibrate?.([120, 80, 120]);
+      // A family checking in together gives one alert per step, not one per person.
+      const merged = new Map<string, Task | Notice>();
+      for (const t of fresh) {
+        const group = "groupId" in t ? t.groupId : null;
+        const key = group ? `${group}|${t.title}` : t.id;
+        const prev = merged.get(key);
+        merged.set(key, prev ? { ...prev, body: `${prev.body}; ${t.body}` } : t);
+      }
+      for (const t of merged.values()) {
+        // Reminders have their own popup until confirmed; they only chime and notify.
+        if (!/^(memo|routine):/.test(t.id)) toast(`${t.title}: ${t.body}`);
+        if (document.visibilityState !== "visible") void systemNotify(t.title, t.body, t.id);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [alerts, ready, toast]);
 
   // Show the count in the browser tab, so a background tab still catches the eye.
   useEffect(() => {
@@ -251,5 +390,14 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
     () => ({ tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine }),
     [tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {audioLocked && sound && isStaffRole(user.role) && (
+        <p className="no-print pointer-events-none fixed bottom-[calc(80px+var(--safe-bottom))] left-3 z-40 rounded-full bg-ink/85 px-3.5 py-2 text-[12px] font-semibold text-white shadow-[var(--shadow-lift)] md:bottom-6 md:left-[248px]">
+          Ketuk layar sekali untuk menyalakan suara notifikasi
+        </p>
+      )}
+    </Ctx.Provider>
+  );
 }

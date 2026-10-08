@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarPlus, Check, Pencil, Plus, Trash2, UserRound, Users, XCircle } from "lucide-react";
+import { Bell, CalendarPlus, Check, Pencil, Plus, Trash2, UserRound, Users, XCircle } from "lucide-react";
 import { Badge, Button, Card, Confirm, Empty, Field, IconButton, Input, Select, Sheet, Spinner, Textarea, cx, errorText, useToast } from "@/components/ui";
 import { Choice } from "@/components/PatientForm";
 import { useUser } from "@/lib/auth";
+import { useFlowAlerts } from "@/components/FlowAlerts";
 import { useCollection, useDoc, useServices, useStaff } from "@/lib/hooks";
 import { BUSINESS, addDays, atTime, dateKey, duration, fromDateKey, longDate, rupiah, time } from "@/lib/format";
 import { dot, fromMin, hoursOn, toMin, useSettings } from "@/lib/settings";
@@ -48,6 +49,7 @@ export default function PortalPage() {
           <p className="text-sm font-semibold text-jade">{BUSINESS.name}</p>
           <h1 className="text-2xl leading-tight font-bold tracking-[-0.01em] md:text-[26px]">Halo, {user.name.split(" ")[0]}</h1>
           <p className="mt-1 text-sm text-muted">Booking terapi untuk Anda dan keluarga. Kami konfirmasi secepatnya.</p>
+          <NotifyButton />
         </div>
         <Button size="lg" className="w-full sm:w-auto" icon={<CalendarPlus className="size-5" />} onClick={() => setBooking(true)}>
           Booking baru
@@ -523,5 +525,16 @@ function PersonSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** So the patient hears when the clinic confirms a booking, even with the tab in the background. */
+function NotifyButton() {
+  const { notifyAllowed, askNotify } = useFlowAlerts();
+  if (notifyAllowed !== false) return null;
+  return (
+    <Button size="sm" variant="secondary" icon={<Bell className="size-3.5" />} onClick={askNotify} className="mt-3">
+      Izinkan notifikasi
+    </Button>
   );
 }
