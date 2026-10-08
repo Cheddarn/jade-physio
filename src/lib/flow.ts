@@ -1,8 +1,8 @@
 import { store, type Row } from "./store";
 import { createBooking } from "./actions";
 import { INVERSE, relationLabel } from "./relations";
-import { dateKey } from "./format";
-import type { Customer, CustomerLink, Gender, PatientProfile, RelationKind, Service, Staff, Visit } from "./types";
+import { dateKey, time } from "./format";
+import type { Booking, Customer, CustomerLink, Gender, PatientProfile, RelationKind, Service, Staff, Visit } from "./types";
 
 /* ---------------- Rooms and beds ---------------- */
 
@@ -100,6 +100,16 @@ export const peopleCount = (v: Visit) => (v.peopleL || 0) + (v.peopleP || 0);
 export const readyForSession = (v: Visit) =>
   v.stage === "waiting" && v.shoes === "changed" && !!v.staffId && !!v.bedId;
 
+/** The booking a patient made for today, when they arrive: still open, not on another visit, the one nearest now. */
+export function bookingOnArrival(bookings: Row<Booking>[], visits: Visit[], customerId: string, now: number) {
+  const used = new Set(visits.map((v) => v.bookingId).filter(Boolean));
+  return (
+    bookings
+      .filter((b) => b.customerId === customerId && b.status === "booked" && !used.has(b.id))
+      .sort((a, b) => Math.abs(a.startAt - now) - Math.abs(b.startAt - now))[0] ?? null
+  );
+}
+
 export function peopleText(v: Pick<Visit, "peopleL" | "peopleP">) {
   const parts = [];
   if (v.peopleL) parts.push(`${v.peopleL} pria`);
@@ -153,12 +163,20 @@ export function tasksFor(
         });
     } else if (user.role === "therapist") {
       const mine = !!user.staffId && v.staffId === user.staffId;
-      if (mine && v.stage === "waiting")
+      if (mine && v.stage === "waiting" && v.bedId)
         push({
           id: `${v.id}:assigned:${v.bedId}`,
           visitId: v.id,
-          title: `Pasien baru untuk Anda, ${bedLabel(v.bedId)}`,
+          title: `${v.bookedAt ? "Pasien booking Anda" : "Pasien baru untuk Anda"}, ${bedLabel(v.bedId)}`,
           body: `${v.customerName}${v.complaint ? `: ${v.complaint}` : ""}`,
+        });
+      // Came for a booking with this therapist: told on arrival, before the desk picks a bed.
+      if (mine && v.stage === "waiting" && !v.bedId)
+        push({
+          id: `${v.id}:arrived`,
+          visitId: v.id,
+          title: "Pasien booking Anda sudah datang",
+          body: `${v.customerName}, booking ${time(v.bookedAt ?? v.arrivedAt)}${v.complaint ? `: ${v.complaint}` : ""}`,
         });
       if (mine && readyForSession(v))
         push({ id: `${v.id}:ready`, visitId: v.id, title: "Pasien siap masuk", body: `${v.customerName}, ${bedLabel(v.bedId)}` });
@@ -189,6 +207,8 @@ export interface CheckInPerson {
   peopleP: number;
   therapistGender: Gender | null;
   complaint?: string;
+  /** Today's booking they came for: its therapist is told straight away, and it is the one paid at checkout. */
+  booking?: Row<Booking> | null;
 }
 
 /**
@@ -202,7 +222,7 @@ export async function checkIn(
 ) {
   const now = Date.now();
   const groupId = relatives.length ? store.newId("visits") : null;
-  const visit = (p: CheckInPerson, relation: RelationKind | null): Visit => ({
+  const visit = (p: CheckInPerson, relation: RelationKind | null, booking: Row<Booking> | null): Visit => ({
     dateKey: dateKey(now),
     arrivedAt: now,
     customerId: p.customer.id,
@@ -211,7 +231,11 @@ export async function checkIn(
     peopleL: p.peopleL,
     peopleP: p.peopleP,
     therapistGender: p.therapistGender,
-    complaint: p.complaint?.trim() || p.customer.profile?.complaint || undefined,
+    complaint: p.complaint?.trim() || booking?.notes?.trim() || p.customer.profile?.complaint || undefined,
+    // Came for a booking: its therapist and service carry over, so only the bed is left to pick.
+    ...(booking
+      ? { bookingId: booking.id, bookedAt: booking.startAt, staffId: booking.staffId, staffName: booking.staffName, serviceName: booking.serviceName }
+      : {}),
     intakeDone: !!p.customer.profile,
     groupId,
     relation,
@@ -230,6 +254,13 @@ export async function checkIn(
       if (!c) throw new Error(`Pasien ${p.customer.name} tidak ditemukan.`);
       fresh.set(p.customer.id, c);
     }
+    // A booking someone started or cancelled a moment ago is left alone.
+    const booked = new Map<CheckInPerson, Row<Booking>>();
+    for (const p of people) {
+      if (!p.booking) continue;
+      const b = await tx.get<Booking>("bookings", p.booking.id);
+      if (b?.status === "booked") booked.set(p, b);
+    }
     const links = new Map<string, CustomerLink[]>([...fresh].map(([cid, c]) => [cid, c.links ?? []]));
     const addLink = (from: string, link: CustomerLink) =>
       links.set(from, [...links.get(from)!.filter((l) => l.id !== link.id), link]);
@@ -243,8 +274,8 @@ export async function checkIn(
       if (relatives.length) patch.links = links.get(p.customer.id);
       if (Object.keys(patch).length) tx.update("customers", p.customer.id, patch);
     }
-    tx.set("visits", id, visit(lead, null));
-    for (const r of relatives) tx.set("visits", store.newId("visits"), visit(r, r.relation));
+    tx.set("visits", id, visit(lead, null, booked.get(lead) ?? null));
+    for (const r of relatives) tx.set("visits", store.newId("visits"), visit(r, r.relation, booked.get(r) ?? null));
   });
   return id;
 }

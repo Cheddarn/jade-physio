@@ -57,9 +57,10 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 
 1. **Pasien datang** (front desk): pick or add the patient, gender, number of men/women needing slippers, which therapist gender is needed, short complaint.
    Cleaning service gets *Ganti sepatu pasien*; therapists of that gender get *Pasien datang*. New patients open the registration form straight away.
+   A patient who booked for today shows their booking on the sheet (*Datang untuk booking ini*, on by default; switch it off to record a walk-in): only the booked therapist is called (*Pasien booking Anda sudah datang*), and the therapist and service are filled in for step 4.
 2. **Formulir pasien** (front desk): the paper form, sections A-F, saved on the customer. The medical record number (RM-000001) is assigned automatically.
 3. **Sepatu sudah diganti** (cleaning service): optional shoe rack number.
-4. **Atur terapis & bed** (front desk): service, therapist (matching gender listed first, with how many patients each has), and a free bed. The therapist is alerted with the bed and complaint; a booking is created on the calendar.
+4. **Atur terapis & bed** (front desk): service, therapist (matching gender listed first, with how many patients each has), and a free bed. The therapist is alerted with the bed and complaint; a booking is created on the calendar, or the patient's own booking for today is used.
 5. **Mulai sesi** / **Sesi selesai** (therapist): the bed lights up in the therapist's colour in the 3D map while in session.
 6. After *Sesi selesai*, cleaning service gets *Kembalikan sepatu* and the front desk gets *Siap checkout*. The patient leaves the board once the shoes are returned.
 
@@ -74,7 +75,7 @@ Sound starts after the first tap on the page (a browser rule); until then staff 
 | Who | Gets |
 |---|---|
 | Front desk (admin) | *Permintaan booking dari pasien*, *Pasien menunggu formulir*, *Sesi selesai, siap checkout*, dated reminders and the hourly routine |
-| Therapist | *Pasien minta booking dengan Anda*, *Booking baru untuk Anda* (made at the desk or a request confirmed, also when moved), *Pasien datang* (no therapist yet, matching gender), *Pasien baru untuk Anda* with the bed, *Pasien siap masuk*, *Buat laporan terapi* |
+| Therapist | *Pasien minta booking dengan Anda*, *Booking baru untuk Anda* (made at the desk or a request confirmed, also when moved), *Pasien datang* (no therapist yet, matching gender), *Pasien booking Anda sudah datang*, *Pasien baru untuk Anda* / *Pasien booking Anda* with the bed, *Pasien siap masuk*, *Buat laporan terapi* |
 | Cleaning service | *Ganti sepatu pasien*, *Kembalikan sepatu* |
 | Manager | the front desk's alerts except the hourly routine, plus *Permintaan restock* / *Restock urgent* |
 | Patient (portal) | *Booking dikonfirmasi*, *Permintaan booking ditolak* |

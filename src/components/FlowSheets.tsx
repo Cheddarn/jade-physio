@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  CalendarCheck,
   Check,
   ClipboardList,
   FileText,
@@ -22,12 +23,12 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { Badge, Button, Confirm, Field, IconButton, Input, Select, Sheet, Textarea, cx, errorText, useToast } from "./ui";
+import { Badge, Button, Confirm, Field, IconButton, Input, Select, Sheet, Switch, Textarea, cx, errorText, useToast } from "./ui";
 import { CustomerPicker } from "./CustomerPicker";
 import { Choice } from "./PatientForm";
 import { useFlowAlerts } from "./FlowAlerts";
 import { useCan, useUser } from "@/lib/auth";
-import { useDoc, useServices, useStaff } from "@/lib/hooks";
+import { useCollection, useDoc, useServices, useStaff } from "@/lib/hooks";
 import { canRunSession } from "@/lib/roles";
 import {
   BEDS,
@@ -38,6 +39,7 @@ import {
   assignVisit,
   bedLabel,
   bedOccupancy,
+  bookingOnArrival,
   cancelVisit,
   checkIn,
   finishVisit,
@@ -51,10 +53,10 @@ import {
   undoShoes,
   type VisitRow,
 } from "@/lib/flow";
-import { duration, rupiah, staffColor, time } from "@/lib/format";
+import { dateKey, duration, rupiah, staffColor, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import { groupColor, relationLabel, relationOptions } from "@/lib/relations";
-import type { Customer, Gender, RelationKind } from "@/lib/types";
+import type { Booking, Customer, Gender, RelationKind } from "@/lib/types";
 import { minutesSince } from "./BedPlan";
 
 /* ---------------- Check-in: patient walks in ---------------- */
@@ -66,6 +68,8 @@ interface RelativeDraft {
   relation: RelationKind | "";
   want: Gender | "any";
   complaint: string;
+  /** Came for their booking today, when they have one. */
+  forBooking: boolean;
 }
 
 export function CheckInSheet({
@@ -86,6 +90,7 @@ export function CheckInSheet({
   const [want, setWant] = useState<Gender | "any">("any");
   const [complaint, setComplaint] = useState("");
   const [relatives, setRelatives] = useState<RelativeDraft[]>([]);
+  const [forBooking, setForBooking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [wasOpen, setWasOpen] = useState(false);
@@ -99,12 +104,22 @@ export function CheckInSheet({
       setWant("any");
       setComplaint("");
       setRelatives([]);
+      setForBooking(true);
       setError("");
     }
   }
 
+  // A patient who booked for today: that booking's therapist is told on arrival, and it is the one paid at checkout.
+  const { visits: visitsToday } = useFlowAlerts();
+  const { rows: bookingsToday } = useCollection<Booking>(open ? "bookings" : null, [["dateKey", "==", dateKey(Date.now())]]);
+  const bookingOf = (c: Row<Customer> | null) =>
+    c && bookingsToday ? bookingOnArrival(bookingsToday, visitsToday ?? [], c.id, Date.now()) : null;
+  const leadFound = bookingOf(customer);
+  const leadBooking = forBooking ? leadFound : null;
+
   function pick(c: Row<Customer> | null) {
     setCustomer(c);
+    setForBooking(true);
     if (!c) return;
     if (c.gender) choose(c.gender);
     if (c.profile?.complaint && !complaint) setComplaint(c.profile.complaint);
@@ -137,7 +152,7 @@ export function CheckInSheet({
     setBusy(true);
     try {
       const id = await checkIn(
-        { customer, gender, peopleL, peopleP, therapistGender: want === "any" ? null : want, complaint },
+        { customer, gender, peopleL, peopleP, therapistGender: want === "any" ? null : want, complaint, booking: leadBooking },
         relatives.map((r) => ({
           customer: r.customer!,
           gender: r.gender,
@@ -147,13 +162,14 @@ export function CheckInSheet({
           therapistGender: r.want === "any" ? null : r.want,
           complaint: r.complaint,
           relation: r.relation as RelationKind,
+          booking: r.forBooking ? bookingOf(r.customer) : null,
         })),
         user.email,
       );
       toast(
         relatives.length
           ? `${customer.name} dan ${relatives.length} kerabat tercatat dan terhubung. Tim sudah diberi tahu.`
-          : `${customer.name} tercatat. Cleaning service dan terapis sudah diberi tahu.`,
+          : `${customer.name} tercatat. Cleaning service dan ${leadBooking ? leadBooking.staffName : "terapis"} sudah diberi tahu.`,
       );
       onDone(id, { ...customer, gender });
       onClose();
@@ -190,6 +206,7 @@ export function CheckInSheet({
         <Field label="Pasien" hint={!customer ? "Pasien baru: ketik nama lalu tambah. Formulir lengkap diisi setelah ini." : undefined}>
           <CustomerPicker value={customer} onChange={pick} autoFocus hint={formHint} />
         </Field>
+        {leadFound && <BookingLink booking={leadFound} on={forBooking} onChange={setForBooking} />}
 
         <Field label="Jenis kelamin pasien">
           <Choice
@@ -212,17 +229,19 @@ export function CheckInSheet({
           </div>
         </Field>
 
-        <Field label="Butuh terapis">
-          <Choice
-            value={want}
-            onChange={setWant}
-            options={[
-              ["L", "Pria"],
-              ["P", "Wanita"],
-              ["any", "Siapa saja"],
-            ]}
-          />
-        </Field>
+        {!leadBooking && (
+          <Field label="Butuh terapis">
+            <Choice
+              value={want}
+              onChange={setWant}
+              options={[
+                ["L", "Pria"],
+                ["P", "Wanita"],
+                ["any", "Siapa saja"],
+              ]}
+            />
+          </Field>
+        )}
 
         <Field label="Keluhan singkat" htmlFor="ci-complaint" hint="Langsung terlihat oleh terapis.">
           <Textarea id="ci-complaint" value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder="mis. Nyeri lutut kanan sejak 2 minggu" />
@@ -251,12 +270,16 @@ export function CheckInSheet({
                 onChange={(c) =>
                   patchRel(r.key, {
                     customer: c,
+                    forBooking: true,
                     ...(c?.gender ? { gender: c.gender, want: c.gender } : {}),
                     ...(c?.profile?.complaint && !r.complaint ? { complaint: c.profile.complaint } : {}),
                   })
                 }
                 hint={formHint}
               />
+              {bookingOf(r.customer) && (
+                <BookingLink booking={bookingOf(r.customer)!} on={r.forBooking} onChange={(on) => patchRel(r.key, { forBooking: on })} />
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Jenis kelamin">
                   <Choice
@@ -279,17 +302,19 @@ export function CheckInSheet({
                   </Select>
                 </Field>
               </div>
-              <Field label="Butuh terapis">
-                <Choice
-                  value={r.want}
-                  onChange={(w) => patchRel(r.key, { want: w })}
-                  options={[
-                    ["L", "Pria"],
-                    ["P", "Wanita"],
-                    ["any", "Siapa saja"],
-                  ]}
-                />
-              </Field>
+              {!(r.forBooking && bookingOf(r.customer)) && (
+                <Field label="Butuh terapis">
+                  <Choice
+                    value={r.want}
+                    onChange={(w) => patchRel(r.key, { want: w })}
+                    options={[
+                      ["L", "Pria"],
+                      ["P", "Wanita"],
+                      ["any", "Siapa saja"],
+                    ]}
+                  />
+                </Field>
+              )}
               <Field label="Keluhan singkat" htmlFor={`rel-c-${r.key}`}>
                 <Input id={`rel-c-${r.key}`} value={r.complaint} onChange={(e) => patchRel(r.key, { complaint: e.target.value })} />
               </Field>
@@ -298,13 +323,29 @@ export function CheckInSheet({
           <Button
             variant="secondary"
             icon={<UserPlus className="size-4" />}
-            onClick={() => setRelatives((l) => [...l, { key: Date.now(), customer: null, relation: "", want: "any", complaint: "" }])}
+            onClick={() => setRelatives((l) => [...l, { key: Date.now(), customer: null, relation: "", want: "any", complaint: "", forBooking: true }])}
           >
             Tambah kerabat yang ikut terapi
           </Button>
         </section>
       </div>
     </Sheet>
+  );
+}
+
+/** The patient's booking for today on the check-in sheet. */
+function BookingLink({ booking, on, onChange }: { booking: Row<Booking>; on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="flex flex-col gap-2.5 rounded-xl border border-jade/30 bg-jade-mist/60 px-3.5 py-3">
+      <p className="flex items-start gap-2 text-[13px] text-ink-2">
+        <CalendarCheck className="mt-0.5 size-4 shrink-0 text-jade" />
+        <span>
+          <span className="font-semibold text-ink">Booking hari ini {time(booking.startAt)}</span>, {booking.serviceName} dengan {booking.staffName}.
+          {on ? ` ${booking.staffName} langsung diberi tahu.` : " Dicatat sebagai walk-in."}
+        </span>
+      </p>
+      <Switch checked={on} onChange={onChange} label="Datang untuk booking ini" />
+    </div>
   );
 }
 
@@ -689,7 +730,7 @@ export function Steps({ v, now, compact }: { v: VisitRow; now: number; compact?:
     {
       done: !!v.staffId && !!v.bedId,
       label: "Terapis & bed",
-      detail: v.staffId ? `${v.staffName}, ${bedLabel(v.bedId)}` : `Belum ditentukan (${want})`,
+      detail: v.staffId ? `${v.staffName}, ${v.bedId ? bedLabel(v.bedId) : "bed belum dipilih"}` : `Belum ditentukan (${want})`,
     },
     {
       done: v.stage === "in_session" || v.stage === "finished",
@@ -789,8 +830,8 @@ export function VisitActions({
     );
   if (desk && v.stage === "waiting")
     btns.push(
-      <Button key="assign" size={size} variant={v.staffId ? "secondary" : "primary"} icon={<Stethoscope className="size-4" />} onClick={() => onAssign(v)}>
-        {v.staffId ? "Ubah terapis & bed" : "Atur terapis & bed"}
+      <Button key="assign" size={size} variant={v.bedId ? "secondary" : "primary"} icon={<Stethoscope className="size-4" />} onClick={() => onAssign(v)}>
+        {v.bedId ? "Ubah terapis & bed" : "Atur terapis & bed"}
       </Button>,
     );
   if (runner && v.stage === "waiting" && v.staffId && v.bedId)
@@ -889,6 +930,7 @@ function waitingText(v: VisitRow) {
   if (v.stage === "in_session") return `Sedang sesi dengan ${v.staffName}.`;
   if (v.shoes === "pending") return "Menunggu cleaning service mengganti sepatu.";
   if (!v.staffId) return "Front desk sedang menentukan terapis dan bed.";
+  if (!v.bedId) return `Front desk sedang memilih bed untuk sesi dengan ${v.staffName}.`;
   return `Menunggu ${v.staffName} memulai sesi.`;
 }
 

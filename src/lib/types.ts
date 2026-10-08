@@ -269,6 +269,8 @@ export interface Visit {
   bedId?: string | null;
   serviceName?: string | null;
   bookingId?: string | null;
+  /** When the booking this visit came for was scheduled; empty for a walk-in. */
+  bookedAt?: number | null;
   assignedAt?: number | null;
 
   stage: VisitStage;
