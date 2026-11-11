@@ -16,6 +16,7 @@ import {
 import { doc, getDoc, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
 import { auth, db, DEMO_MODE, provisionAuth } from "./firebase";
 import { can as canRole, isRole, normalizeRole, type Cap, type Role } from "./roles";
+import { resetQueries } from "./hooks";
 import type { Access, PortalAccount } from "./types";
 
 export interface SessionUser {
@@ -101,7 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       stopAccess?.();
       stopAccess = undefined;
       const email = loginId(u);
-      if (!u || !email) return setState({ status: "signed_out" });
+      if (!u || !email) {
+        // Nothing the last person loaded stays in memory for the next one.
+        resetQueries();
+        return setState({ status: "signed_out" });
+      }
       const name = u.displayName || (u.email ? email.split("@")[0] : localPhone(email));
       // Live: if an admin changes this person's role or removes them, the app follows.
       stopAccess = onSnapshot(

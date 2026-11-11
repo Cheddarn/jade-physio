@@ -27,6 +27,7 @@ import { Badge, Button, Confirm, Field, IconButton, Input, Select, Sheet, Switch
 import { CustomerPicker } from "./CustomerPicker";
 import { Choice } from "./PatientForm";
 import { useFlowAlerts } from "./FlowAlerts";
+import { ReportSheet } from "./ReportSheet";
 import { useCan, useUser } from "@/lib/auth";
 import { useCollection, useDoc, useServices, useStaff } from "@/lib/hooks";
 import { canRunSession } from "@/lib/roles";
@@ -54,7 +55,7 @@ import {
   type VisitRow,
 } from "@/lib/flow";
 import { dateKey, duration, rupiah, staffColor, time } from "@/lib/format";
-import type { Row } from "@/lib/store";
+import { store, type Row } from "@/lib/store";
 import { groupColor, relationLabel, relationOptions } from "@/lib/relations";
 import type { Booking, Customer, Gender, RelationKind } from "@/lib/types";
 import { minutesSince } from "./BedPlan";
@@ -785,21 +786,36 @@ export function VisitActions({
   const can = useCan();
   const desk = can("flow.manage");
   const runner = canRunSession(user, { staffId: v.staffId ?? undefined });
-  const { reported } = useFlowAlerts();
+  const { reported, mute } = useFlowAlerts();
   const shoes = user.role === "cleaning" || desk;
   const [rackFor, setRackFor] = useState(false);
   const [rack, setRack] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [reportFor, setReportFor] = useState<Row<Booking> | null>(null);
+  const ownPatient = user.role === "therapist" && !!user.staffId && v.staffId === user.staffId;
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string) {
     setBusy(key);
     try {
       await fn();
       toast(ok);
+      return true;
     } catch (e) {
       toast(errorText(e), "error");
+      return false;
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** The report form opens right here, so the physio writes it while the session is fresh. */
+  async function openReport() {
+    if (!v.bookingId) return;
+    try {
+      const b = await store.get<Booking>("bookings", v.bookingId);
+      if (b) setReportFor(b);
+    } catch (e) {
+      toast(errorText(e), "error");
     }
   }
 
@@ -854,23 +870,21 @@ export function VisitActions({
         size={size}
         loading={busy === "finish"}
         icon={<Square className="size-4" />}
-        onClick={() =>
-          run(
-            "finish",
-            () => finishVisit(v),
-            user.role === "therapist"
-              ? `Sesi ${v.customerName} selesai. Jangan lupa buat laporan terapi.`
-              : `Sesi ${v.customerName} selesai. Cleaning dan front desk diberi tahu.`,
-          )
-        }
+        onClick={async () => {
+          const writeNow = ownPatient && !!v.bookingId && !reported.has(v.bookingId);
+          // The report form opens next, so the "Buat laporan terapi" ping would only repeat it.
+          if (writeNow) mute(`${v.bookingId}:report`);
+          const ok = await run("finish", () => finishVisit(v), `Sesi ${v.customerName} selesai.${ownPatient ? "" : " Cleaning dan front desk diberi tahu."}`);
+          if (ok && writeNow) openReport();
+        }}
       >
-        Sesi selesai
+        {ownPatient ? "Sesi selesai & isi laporan" : "Sesi selesai"}
       </Button>,
     );
   // The physio owes a report for every session.
   if (user.role === "therapist" && v.staffId === user.staffId && v.bookingId && v.stage === "finished" && !reported.has(v.bookingId))
     btns.push(
-      <Button key="report" size={size} icon={<FileText className="size-4" />} onClick={() => router.push(`/laporan-terapi?booking=${v.bookingId}`)}>
+      <Button key="report" size={size} icon={<FileText className="size-4" />} onClick={openReport}>
         Buat laporan terapi
       </Button>,
     );
@@ -895,6 +909,7 @@ export function VisitActions({
 
   return (
     <>
+      <ReportSheet booking={reportFor} visitId={v.id} complaint={v.complaint} onClose={() => setReportFor(null)} />
       {btns.length > 0 ? (
         <div className={cx("flex flex-wrap gap-2", size === "lg" && "[&>*]:flex-1")}>{btns}</div>
       ) : size === "lg" ? (

@@ -1,49 +1,121 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { store, type Filter, type Row } from "./store";
 import type { Customer, Package, Service, Staff } from "./types";
 
-export function useCollection<T>(col: string | null, filters: Filter[] = []) {
-  const key = JSON.stringify([col, filters]);
-  const [state, setState] = useState<{ key: string; rows: Row<T>[] | null; error: Error | null }>({
-    key,
-    rows: null,
-    error: null,
-  });
+/* ---------------- Shared live queries ----------------
+   Every component that asks for the same query shares one listener, and the result stays in memory
+   for a while after the last one leaves. Moving between pages then shows data at once instead of a
+   spinner, and the sidebar, alerts and page no longer each open their own copy of the same query. */
 
-  useEffect(() => {
-    if (!col) return;
-    const unsub = store.watch<T>(
-      col,
-      filters,
-      (rows) => setState({ key, rows, error: null }),
-      (error) => setState({ key, rows: [], error }),
-    );
-    return unsub;
+interface Entry {
+  value: unknown;
+  loaded: boolean;
+  error: Error | null;
+  /** Bumped on every change, so React knows when to re-render. */
+  version: number;
+  subs: Set<() => void>;
+  stop: (() => void) | null;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const cache = new Map<string, Entry>();
+/** How long a query nobody is looking at stays live. */
+const LINGER_MS = 90_000;
+
+function retain(key: string, notify: () => void, start: (push: (value: unknown, error?: Error | null) => void) => () => void) {
+  let e = cache.get(key);
+  if (!e) {
+    e = { value: null, loaded: false, error: null, version: 0, subs: new Set(), stop: null, timer: null };
+    cache.set(key, e);
+  }
+  const entry = e;
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  entry.subs.add(notify);
+  if (!entry.stop) {
+    let stop: (() => void) | null = null;
+    stop = entry.stop = start((value, error = null) => {
+      entry.value = value;
+      entry.error = error;
+      entry.loaded = true;
+      entry.version++;
+      // A listener that failed is over: whoever asks next starts a new one.
+      if (error && entry.stop === stop) {
+        queueMicrotask(() => stop?.());
+        entry.stop = null;
+      }
+      entry.subs.forEach((n) => n());
+    });
+  }
+  return () => {
+    entry.subs.delete(notify);
+    if (entry.subs.size || entry.timer) return;
+    entry.timer = setTimeout(() => {
+      entry.stop?.();
+      if (cache.get(key) === entry) cache.delete(key);
+    }, LINGER_MS);
+  };
+}
+
+/** Drop everything held in memory, e.g. when someone signs out, so the next person never sees it. */
+export function resetQueries() {
+  for (const [key, e] of cache) {
+    if (e.timer) clearTimeout(e.timer);
+    e.stop?.();
+    cache.delete(key);
+    e.subs.forEach((n) => n());
+  }
+}
+
+function useShared(key: string, start: (push: (value: unknown, error?: Error | null) => void) => () => void) {
+  const subscribe = useCallback(
+    (notify: () => void) => (key ? retain(key, notify, start) : () => {}),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    [key],
+  );
+  useSyncExternalStore(
+    subscribe,
+    () => (key ? (cache.get(key)?.version ?? -1) : -1),
+    () => -1,
+  );
+  return key ? cache.get(key) : undefined;
+}
 
-  const stale = state.key !== key;
+export function useCollection<T>(col: string | null, filters: Filter[] = []) {
+  const key = col ? JSON.stringify(["c", col, filters]) : "";
+  const e = useShared(key, (push) =>
+    store.watch<T>(
+      col!,
+      filters,
+      (rows) => push(rows),
+      // A query the rules refuse still answers, with nothing, so pages don't wait forever.
+      (error) => push([], error),
+    ),
+  );
+  const loaded = !!e?.loaded;
   return {
-    rows: stale ? null : state.rows,
-    loading: col !== null && (stale || state.rows === null),
-    error: stale ? null : state.error,
+    rows: loaded ? (e!.value as Row<T>[]) : null,
+    loading: col !== null && !loaded,
+    error: e?.error ?? null,
   };
 }
 
 export function useDoc<T>(col: string, id: string | null | undefined) {
-  const [state, setState] = useState<{ id: string | null | undefined; row: Row<T> | null; loaded: boolean }>({
-    id,
-    row: null,
-    loaded: false,
-  });
-  useEffect(() => {
-    if (!id) return;
-    return store.watchDoc<T>(col, id, (row) => setState({ id, row, loaded: true }));
-  }, [col, id]);
-  const stale = state.id !== id;
-  return { row: stale ? null : state.row, loading: !!id && (stale || !state.loaded) };
+  const key = id ? JSON.stringify(["d", col, id]) : "";
+  const e = useShared(key, (push) =>
+    store.watchDoc<T>(
+      col,
+      id!,
+      (row) => push(row),
+      (error) => push(null, error),
+    ),
+  );
+  const loaded = !!e?.loaded;
+  return { row: loaded ? (e!.value as Row<T> | null) : null, loading: !!id && !loaded };
 }
 
 const byOrder = (a: Row<Staff>, b: Row<Staff>) => a.order - b.order || a.name.localeCompare(b.name);

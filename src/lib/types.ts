@@ -56,6 +56,8 @@ export interface Customer {
   /** When the desk last sent a "time for your next session" WhatsApp, and who sent it. */
   followedUpAt?: number | null;
   followedUpBy?: string | null;
+  /** Start of this patient's first paid session, set at checkout. New vs returning patients are told apart by it. */
+  firstSessionAt?: number | null;
 }
 
 /** How the linked person relates to this customer: "id is my <kind>". */
@@ -140,6 +142,64 @@ export interface Booking {
   /** When the desk sent the WhatsApp appointment reminder. */
   remindedAt?: number | null;
   remindedBy?: string | null;
+  /** When the session ended: "Sesi selesai", or checkout if that came first. */
+  endedAt?: number | null;
+  /** True from the end of the session until the physio's report is in, so unwritten reports are one small query. */
+  reportDue?: boolean;
+  /** When the therapy report was first saved. */
+  reportAt?: number | null;
+  /** The physio's commission for this session, frozen at checkout so later rate changes don't touch it. */
+  commission?: CommissionSnapshot | null;
+  /** Made by checkout for a service sold without a booking. */
+  walkIn?: boolean;
+}
+
+/* ---------------- Commission and daily compensation ---------------- */
+
+/** percent: of the service price. flat: rupiah per session. none: this service pays no commission. */
+export interface CommissionRate {
+  type: "percent" | "flat" | "none";
+  value: number;
+}
+
+export interface CommissionSnapshot extends CommissionRate {
+  /** Rupiah earned for the session. */
+  amount: number;
+}
+
+/** meta/commission. Only the manager changes it. */
+export interface CommissionSettings {
+  enabled: boolean;
+  /** Sessions before this day (YYYY-MM-DD) earn nothing. */
+  since: string | null;
+  /** Hold a session's commission until its therapy report is written. */
+  holdUntilReport: boolean;
+  /** For services without a rate of their own. */
+  defaultRate: CommissionRate;
+  /** Per service id. A missing id follows the default. */
+  rates: Record<string, CommissionRate>;
+  /** Physios (staff ids) left out of commission and compensation. */
+  staffOff: string[];
+  /** A fixed amount for a working day without a single patient. */
+  compensation: {
+    enabled: boolean;
+    amount: number;
+    since: string | null;
+    /** What counts as a working day: clocked in, or a shift on the schedule. */
+    basis: "attendance" | "shift";
+  };
+}
+
+/** The manager's own figure for one physio on one day. Doc id = `${staffId}_${dateKey}`. */
+export interface PayDay {
+  staffId: string;
+  dateKey: string;
+  /** Compensation for the day, replacing the automatic one. 0 = none. */
+  compensation: number;
+  note?: string;
+  by: string;
+  byName: string;
+  at: number;
 }
 
 export interface Redemption {

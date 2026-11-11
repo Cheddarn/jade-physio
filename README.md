@@ -5,17 +5,18 @@ Built with Next.js 16 (App Router), React 19, Tailwind CSS 4 and Firebase (Auth 
 
 ## What's inside
 
-The sidebar is grouped into **Operasional**, **Tim & klinik**, **Keuangan & laporan** and **Pengaturan**.
+The sidebar is grouped into **Operasional**, **Tim & klinik**, **Keuangan & laporan** and **Pengaturan**. The manager opens on **Dasbor**; everyone else on **Alur pasien**.
 Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainnya*, to search patients by name, phone or No. RM, jump to any page, or start a common action (*Pasien datang*, *Booking baru*, *Transaksi baru*, *Pengingat jadwal besok*, *Ajukan restock*).
 
 | Menu | What it does |
 | --- | --- |
 | **Alur pasien** | The live walk-in board, and everyone's home screen. Front desk taps *Pasien datang* (patient gender, how many people need slippers, male/female therapist needed, short complaint). Cleaning service and the matching therapists get an alert right away. The board tracks each patient: shoes changed (with rack no.), registration form, therapist & bed, session, shoes returned. A **bed map** (*Denah*, laid out like the clinic: Ruang 1 beds 1-2 along the back wall and 3-5 in front of them, Ruang 2 beds 6-7) and a 3D version exist but are switched off for now (`SHOW_BED_MAP` and `SHOW_3D` in `src/app/(app)/alur/page.tsx`); beds are still assigned in *Atur terapis & bed*. |
 | **Booking saya** (patients) | Patient portal. Patients sign in with their phone number and an SMS code; a new number just adds a name (email optional) to make the account. They add the people on their account (name, phone, gender, relation), and book one or more of them at once, each with their own complaint and preferred physio. The front desk confirms; the patient sees the status live. |
-| **Laporan terapi** | Physios must write a report for every finished session (alert + red badge until done): complaint, findings, treatment, home advice, next visit, plus an optional PDF/JPG/PNG upload. Front desk downloads it, opens a printable PDF, or sends it by WhatsApp (summary + PDF link). *Salin daftar pasien* copies today's patient list as text. |
+| **Laporan terapi** | Physios must write a report for every finished session, on the same day. *Sesi selesai & isi laporan* opens the form right away, on the same screen; one-tap choices fill in treatment, home advice and the next visit, and *Salin isinya* starts from the patient's last report. A report left for later is not forgotten: it stays in **Laporan terapi belum dibuat** (on the physio's board and on this page, oldest first, marked *Kemarin* / *3 hari lalu*), keeps counting in the red badge on any day, and is shown again when the physio taps *Pulang*. The form: complaint, findings, treatment, home advice, next visit, plus an optional PDF/JPG/PNG upload. Front desk downloads it, opens a printable PDF, or sends it by WhatsApp (summary + PDF link). *Salin daftar pasien* copies today's patient list as text. |
 | **Jadwal kerja** | Clock in / *Pulang* for every staff member (sidebar and *Lainnya*), with the exact time (hour and minute) in and out and hours worked ("8 jam 12 menit"). Managers see a daily table (shift, masuk, pulang, lama kerja, status), can correct a wrong or forgotten clock-out (overtime is recalculated), and download the month as CSV for payroll. Each person's shift per weekday; time past the shift end counts as overtime (5 min grace), shown live and confirmed at *Pulang* with an optional note. Monthly overtime summary. Clinic opening hours per weekday. |
 | **Restock** | Any staff member requests an item (qty, unit, category, urgent, note). Listed per day, grouped by month, with the status *Diajukan → Menunggu barang → Diterima*. The manager taps *Proses*: corrects the name, quantity and unit, enters the total price, and confirms the order. Whoever is there when it arrives taps *Barang datang*. Prices are only visible to the manager (they are stored as costs for *Laba & biaya*). *Salin daftar belanja* (manager) merges requested items into a shopping list. |
-| **Ringkasan** | For admin and manager/supervisor: walk-ins, sessions, waiting time, income, packages sold, report completion, overtime, open restock, online bookings, expiring packages, per-physio table, and a timeline of everything that happened (filterable). |
+| **Dasbor** | The manager's start page, for any date range (today, 7 days, 30 days, this month, last month, or pick dates), each figure compared with the same number of days before. **Pasien baru** and **pasien lama** (a patient is new in the period of their first session), patients served and how many of last period's came back, sessions, income, cancellations, and what the physios earned. Charts: new and returning patients per day (per week or month on long ranges), where new patients heard of the clinic (from the registration form), therapy reports per physio (on time = written the same day, late, not written), busiest hours, most-used services, gender and age of patients, and the list of new patients. The *Aktivitas* tab keeps the earlier Ringkasan: tiles for walk-ins, waiting time, overtime, open restock, online bookings and expiring packages, and a filterable timeline of everything that happened. |
+| **Komisi** | What each physio earns. The manager switches commission on or off and sets a rate **per service**: a percentage of the service price, a fixed amount, or none, with a default for services that have no rate of their own. The rate is frozen on the session at checkout, so changing rates later never rewrites the past. **Kompensasi harian**: a fixed amount for a working day without a single patient (so without commission), counted from clock-ins or from the shift schedule, and only once the day is over. The manager can set any day's compensation by hand (with a note), leave physios out, and optionally hold a session's commission until its therapy report is written. Per-physio totals for any date range, a day-by-day breakdown, and a CSV for payroll. Physios see **Komisi saya**: their own sessions, rates and total, nobody else's. |
 | **Kalender** | Tap the date title to open a month calendar (with booking counts per day) and jump to any date. The slot under the mouse is highlighted before you click to book. Opening hours follow the weekday, and time outside a physio's shift is shaded. The day runs 2 hours past closing (*Lembur*), so overtime sessions can be booked. Patients' online booking requests show as dashed blocks and under *Permintaan*. One column per therapist. *Ingatkan pasien* lists tomorrow's bookings (or the day shown, if later) with a WhatsApp *Ingatkan* button per patient: the message has the day, time, service and physio, and the booking is marked as reminded so nobody gets it twice. On phones the calendar opens as a list; switch to *Jadwal* for the columns (remembered). A therapist can hold several patients at the same time (overlapping bookings sit side by side). Tap an empty slot or *Booking baru* to book: the form opens in the middle of the screen in four short steps (Pasien → Paket → Jadwal & terapis → Konfirmasi), so nothing needs scrolling. The *Paket* step lists the patient's own packages (*Pakai*, with sessions left) and the packages from Katalog; a package sold this way is added at checkout and pays for this session as its first. If a package covers several services, the step asks which one; with no packages in Katalog it lists services instead. Picking moves straight on, and the last step shows a summary with *Ubah* links. Walk-ins: *Sekarang (walk-in)* on the Jadwal step. Status: Menunggu → Sedang sesi → Lunas. |
 | **Checkout** | Pay with QRIS, transfer bank or kartu. A customer's voucher is applied automatically when it covers the service. A package can be bought and its first session used in the same checkout. Discount and payment reference supported. |
 | **Pelanggan** | Each patient keeps the basics the clinic uses: name, gender, WhatsApp number, date of birth, No. KTP (NIK, 16 digits), address and notes (email optional), filled in with *Pelanggan baru* / *Ubah data* and searchable by name, phone or NIK. Each patient profile has **Riwayat sesi** (every session numbered "Sesi ke-N" with date, time, service, physio, bed, complaint, how it was paid: package "sesi 3/5" or amount and invoice, therapy report link; upcoming and cancelled sessions; summary) and **Riwayat pembelian** (every transaction itemised with discounts, packages and the vouchers they created, sessions paid by package, payment method, invoice and online receipt links, manual packages from the old system, totals and CSV). Physios see the session history without amounts; purchases are for the front desk and managers. Filters: *Punya sesi prabayar*, *Paket hampir kedaluwarsa* (window 3 days to 2 months, default set by a manager) with a WhatsApp *Ingatkan* button that also records when the patient was reminded, *Perlu follow-up* (last session longer ago than a window of 1 week to 3 months, default set by a manager, and nothing booked; counted from the last 6 months of sessions) with a WhatsApp *Follow up* button that records when they were contacted, and *Belum isi formulir*. Patients due a follow-up are also highlighted in the full list. Customer list and profile: prepaid sessions, visit history, invoices, WhatsApp button. Sell a package or add a manual voucher (for moving balances over from Zenwel). |
@@ -45,7 +46,9 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 | Restock: request, confirm arrival | ✓ | ✓ | ✓ | ✓ | – |
 | Restock: process orders, see prices | – | ✓ | – | – | – |
 | Manual voucher, void voucher, cancel an invoice | ✓ | ✓ | – | – | – |
-| Reports, Ringkasan, catalog | ✓ | ✓ | – | – | – |
+| Reports, Dasbor, catalog | ✓ | ✓ | – | – | – |
+| Komisi: rates, on/off, daily compensation, everyone's totals | – | ✓ | – | – | – |
+| Komisi saya: own sessions and total | – | – | ✓ | – | – |
 | WhatsApp templates | ✓ | ✓ | – | – | – |
 | Pengingat (dated reminders) | ✓ | ✓ | – | – | – |
 | Pengingat rutin popups (e.g. TikTok DMs) | ✓ | – | – | – | – |
@@ -98,7 +101,7 @@ The same rules are enforced server-side in `firestore.rules`, so the menu hiding
    - *Authentication → Settings → Authorized domains*: add your site's domain (e.g. `jade-physio.vercel.app`), or phone sign-in is refused there.
    - Real SMS may need the **Blaze** (pay-as-you-go) plan. To try phone sign-in without sending SMS, add a number under *Phone numbers for testing*.
    - *Firestore Database*: create the database (production mode, region `asia-southeast2` Jakarta recommended).
-4. **Deploy the security rules** (once, and again whenever the rules change, **including after this update**, which adds reminders (`memos`), manager-only costs (`expenses`), the restock order steps, and treats old Front desk accounts as Admin):
+4. **Deploy the security rules** (once, and again whenever the rules change, **including after this update**, which adds commission rules (`meta/commission`), the manager's per-day compensation (`payDays`), and lets a physio note on their own booking that the session ended and its report is in). Until they are deployed, commission rules cannot be saved, and a report written by a physio stays listed as missing until the desk opens *Laporan terapi*:
    ```bash
    npm install -g firebase-tools
    firebase login
@@ -117,6 +120,18 @@ The same rules are enforced server-side in `firestore.rules`, so the menu hiding
    The account works right away: tap *Salin info masuk* and send it to them. They can set their own password with **Lupa kata sandi?** on the login page (Firebase emails the link).
    Only patients sign up themselves; staff and clinic accounts are always made by the admin.
 
+## Commission and daily compensation
+
+Open **Komisi → Atur komisi** as the manager.
+
+- **Komisi per sesi.** Every finished session earns its physio the rate of its service: a percentage of the service price (the list price, also when a package paid for it), or a fixed amount. *Berlaku sejak* is the first day that counts.
+- **When it is fixed.** At checkout the rate and amount are saved on the session, so later rate changes, or switching commission off, leave it as it was. A session that is finished but not yet paid shows as *Perkiraan*, at today's rates.
+- **Switching it off and on.** While commission is off, sessions earn nothing. Switching it back on starts from that day (*Berlaku sejak*); move the date back only if the days in between should be paid too, at the current rates.
+- **Tahan komisi sampai laporan terapi dibuat** (off by default). With it on, a session's commission shows as *Ditahan* and is left out of the total until the physio writes the report.
+- **Kompensasi harian.** A fixed amount for each working day on which the physio finished no session. *Absen masuk* counts the days they clocked in; *Jadwal shift* counts the days they have a shift in *Jadwal kerja*, clocked in or not. Today is counted only after the day has passed.
+- **A single day.** In a physio's breakdown, the pencil sets that day's compensation by hand (0 removes it), with a note; *Kembali ke otomatis* undoes it. *Atur kompensasi untuk tanggal lain* covers a day that is not listed.
+- A service sold at checkout without a booking counts as a session too once a physio is picked on the line.
+
 ## Moving from Zenwel
 
 For customers who still have sessions left in Zenwel, open the customer → **Voucher manual**.
@@ -127,6 +142,7 @@ This creates the voucher without an invoice, so it doesn't count as income twice
 
 To try the app without touching real data, set `NEXT_PUBLIC_DEMO_MODE=1` in `.env.local` and restart.
 It loads sample data into the browser (no login, no Firebase), and the sidebar lets you switch between Admin (front desk), Manajer, Terapis, Cleaning and Pasien to preview each role.
+The sample has two months of sessions, new and returning patients, commission rules, two days without patients for one physio, and a few late and unwritten therapy reports.
 Open two tabs with different roles (e.g. Admin and Cleaning) to see the alerts arrive.
 
 ## Deploying
@@ -149,6 +165,11 @@ Edit `BUSINESS` in `src/lib/format.ts` (name, address, phone, opening hours used
 - `team/{email}`: `{ name, role, staffId?, active, schedule: { "0".."6": { start, end } | null } }`
 - `attendance/{email}_{YYYY-MM-DD}`: clock in/out, shift frozen at clock-in, `overtimeMin`, `closing: normal | overtime`
 - `reports/{bookingId}`: therapy report; file in Storage under `reports/{bookingId}/`
+- `bookings.endedAt`, `bookings.reportDue`, `bookings.reportAt`: when the session ended, whether it still owes a report (one small query finds every unwritten report on any day), and when the report was first saved
+- `bookings.commission`: `{ type: 'percent' | 'flat' | 'none', value, amount }`, frozen at checkout; `bookings.walkIn`: made by checkout for a service sold without a booking
+- `meta/commission`: `{ enabled, since, holdUntilReport, defaultRate, rates: { serviceId: { type, value } }, staffOff: [staffId], compensation: { enabled, amount, since, basis: 'attendance' | 'shift' } }`
+- `payDays/{staffId}_{YYYY-MM-DD}`: `{ staffId, dateKey, compensation, note, by, byName, at }`, the manager's own figure for a day
+- `customers.firstSessionAt`: start of the patient's first paid session, set at checkout (older records fall back to `createdAt`)
 - `restock`: `{ item, qty, unit, category, urgent, dateKey, createdBy, done, doneBy, doneAt }`
 - `accounts/{email}`: patient portal account with `persons[]`
 - `requests`: patients' booking requests (`pending → confirmed / rejected / cancelled`), confirmed into `bookings`

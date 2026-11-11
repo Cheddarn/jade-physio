@@ -8,6 +8,7 @@ import { BedPlan, minutesSince } from "@/components/BedPlan";
 import { AssignSheet, CheckInSheet, GroupTag, StageBadge, Steps, VisitActions, VisitDetail } from "@/components/FlowSheets";
 import { PatientForm } from "@/components/PatientForm";
 import { useFlowAlerts } from "@/components/FlowAlerts";
+import { ReportBacklog } from "@/components/ReportBacklog";
 import { QueryAction } from "@/components/QueryAction";
 import { useCan, useUser } from "@/lib/auth";
 import { useDoc, useMediaQuery, useNow, useStaff } from "@/lib/hooks";
@@ -126,6 +127,8 @@ export default function AlurPage() {
       </div>
 
       <div className="flex flex-col gap-6 px-4 md:px-8">
+        {/* Reports left over from earlier days come first: today's are on the patient cards below. */}
+        {user.role === "therapist" && <ReportBacklog older limit={5} />}
         {(user.role === "cleaning" || user.role === "therapist") && (
           <MyTasks role={user.role} tasks={tasks} visits={visits} now={now} onOpen={setSelectedId} onAssign={setAssignId} onForm={() => {}} />
         )}

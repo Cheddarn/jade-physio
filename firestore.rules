@@ -2,8 +2,8 @@ rules_version = '2';
 
 // Roles (collection "access", keyed by lowercase email):
 //   admin     - front desk; everything except restock orders, costs and profit
-//   manager   - everything except the access list, plus restock orders, costs and profit
-//   therapist - read schedule and patients; can only start/finish their own sessions
+//   manager   - everything except the access list, plus restock orders, costs, profit and commission rules
+//   therapist - read schedule and patients; can only start/finish their own sessions and write their reports
 //   cleaning  - patient flow only: mark shoes changed / returned
 //   patient   - self-registered; own portal account and own booking requests only
 service cloud.firestore {
@@ -103,6 +103,19 @@ service cloud.firestore {
     match /meta/settings {
       allow read: if member();
       allow write: if isManager();
+    }
+
+    // Commission rates and daily compensation. The desk reads them to freeze a session's commission at checkout,
+    // a physio to see what their sessions earn. Only the manager changes them.
+    match /meta/commission {
+      allow read: if clinical();
+      allow write: if managerOnly();
+    }
+
+    // The manager's own compensation figure for one physio on one day. Doc id = staffId_YYYY-MM-DD.
+    match /payDays/{id} {
+      allow read: if managerOnly() || (isTherapist() && resource.data.staffId == myStaffId());
+      allow write: if managerOnly();
     }
 
     // ---------- team, shifts, attendance ----------
@@ -208,12 +221,15 @@ service cloud.firestore {
     match /bookings/{id} {
       allow read: if clinical();
       allow create, delete: if isDesk();
+      // A physio starts and finishes their own sessions, and notes when a session ended and whether its report is in.
+      // They can never touch the price, the payment or the commission.
       allow update: if isDesk()
         || (isTherapist()
             && resource.data.staffId == myStaffId()
-            && onlyChanged(['status'])
-            && resource.data.status in ['booked', 'in_session']
-            && request.resource.data.status in ['booked', 'in_session']);
+            && onlyChanged(['status', 'endedAt', 'reportDue', 'reportAt'])
+            && (request.resource.data.status == resource.data.status
+                || (resource.data.status in ['booked', 'in_session']
+                    && request.resource.data.status in ['booked', 'in_session'])));
     }
 
     match /vouchers/{id} {

@@ -1,9 +1,9 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { store } from "./store";
 import { DEMO_MODE, storage } from "./firebase";
-import { BUSINESS, longDate, time } from "./format";
+import { BUSINESS, addDays, dateKey, fromDateKey, longDate, time } from "./format";
 import { waMessage } from "./templates";
-import type { Booking, ReportFile, Settings, TherapyReport } from "./types";
+import type { Booking, ReportFile, Settings, TherapyReport, Visit } from "./types";
 import type { Row } from "./store";
 
 export const REPORT_TYPES = "application/pdf,image/jpeg,image/png";
@@ -68,6 +68,21 @@ export async function saveReport(
     sentBy: existing?.sentBy ?? null,
   };
   await store.set("reports", booking.id, r);
+  // The session no longer owes a report. Kept apart, so a report is never lost over this note on the booking.
+  await store.update("bookings", booking.id, { reportDue: false, reportAt: r.createdAt }).catch(() => {});
+}
+
+/**
+ * The session is over: from now on it owes a report, unless one was already written during the session.
+ * Never stops "Sesi selesai" or checkout if it can't be saved.
+ */
+export async function markSessionEnded(bookingId: string, at = Date.now()) {
+  try {
+    const r = await store.get<TherapyReport>("reports", bookingId);
+    await store.update("bookings", bookingId, { endedAt: at, reportDue: !r, ...(r ? { reportAt: r.createdAt } : {}) });
+  } catch {
+    /* older security rules: today's list still shows the session as owing a report */
+  }
 }
 
 export const markReportSent = (id: string, by: string) => store.update("reports", id, { sentAt: Date.now(), sentBy: by });
@@ -79,6 +94,51 @@ export const markReportSent = (id: string, by: string) => store.update("reports"
 export const reportOwed = (b: Booking, finishedBookingIds: Set<string>, id: string) => b.status === "paid" || finishedBookingIds.has(id);
 export const reportWritable = (b: Booking, finishedBookingIds: Set<string>, id: string) =>
   reportOwed(b, finishedBookingIds, id) || b.status === "in_session";
+
+/* ---------------- Reports still owed, on any day ---------------- */
+
+/** How many days after the session a report is still "on time": the same day. */
+export const REPORT_DUE_DAYS = 0;
+
+/** Whole days between the session and today (0 = today). */
+export function daysLate(b: Pick<Booking, "dateKey">, today = dateKey()) {
+  return Math.max(0, Math.round((fromDateKey(today).getTime() - fromDateKey(b.dateKey).getTime()) / 86_400_000));
+}
+
+export function lateText(b: Pick<Booking, "dateKey">, today = dateKey()) {
+  const d = daysLate(b, today);
+  return d === 0 ? "Hari ini" : d === 1 ? "Kemarin" : `${d} hari lalu`;
+}
+
+/** A report counts as on time when it was written on the day of the session. */
+export const reportOnTime = (r: Pick<TherapyReport, "createdAt" | "dateKey">) => dateKey(r.createdAt) <= addDays(r.dateKey, REPORT_DUE_DAYS);
+
+/**
+ * Sessions from before this was tracked: mark the finished ones without a report, so they show up as owed.
+ * Run by the desk; safe to repeat.
+ */
+export async function flagMissingReports(days = 45) {
+  const from = addDays(dateKey(), -days);
+  const [bookings, reports, visits] = await Promise.all([
+    store.list<Booking>("bookings", [["dateKey", ">=", from]]),
+    store.list<TherapyReport>("reports", [["dateKey", ">=", from]]),
+    store.list<Visit>("visits", [["dateKey", ">=", from]]),
+  ]);
+  const reported = new Map(reports.map((r) => [r.bookingId, r]));
+  const finished = new Set(visits.filter((v) => v.stage === "finished" && v.bookingId).map((v) => v.bookingId!));
+  let flagged = 0;
+  for (const b of bookings) {
+    if (b.status === "cancelled") continue;
+    const r = reported.get(b.id);
+    if (r) {
+      if (b.reportDue || !b.reportAt) await store.update("bookings", b.id, { reportDue: false, reportAt: r.createdAt });
+    } else if (reportOwed(b, finished, b.id) && !b.reportDue) {
+      await store.update("bookings", b.id, { reportDue: true });
+      flagged++;
+    }
+  }
+  return flagged;
+}
 
 export function reportMessage(r: TherapyReport, settings: Pick<Settings, "templates">) {
   return waMessage(settings, "report", {

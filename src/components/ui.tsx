@@ -321,7 +321,7 @@ export function ScrollX({ label, className, children }: { label: string; classNa
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx("rounded-xl border border-line bg-surface", className)}>{children}</div>;
+  return <div className={cx("rounded-xl border border-line bg-surface shadow-[var(--shadow-card)]", className)}>{children}</div>;
 }
 
 export function Badge({

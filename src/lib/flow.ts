@@ -1,5 +1,6 @@
 import { store, type Row } from "./store";
 import { createBooking } from "./actions";
+import { markSessionEnded } from "./reports";
 import { INVERSE, relationLabel } from "./relations";
 import { dateKey, time } from "./format";
 import type { Booking, Customer, CustomerLink, Gender, PatientProfile, RelationKind, Service, Staff, Visit } from "./types";
@@ -350,6 +351,8 @@ export async function finishVisit(v: VisitRow) {
     endedAt: now,
     closedAt: v.shoes === "returned" ? now : null,
   });
+  // From here the session owes a therapy report, on whatever day it gets written.
+  if (v.bookingId) await markSessionEnded(v.bookingId, now);
 }
 
 export async function cancelVisit(v: VisitRow) {

@@ -222,6 +222,7 @@ function Checkout() {
         paymentMethod: needsMethod ? method : null,
         paymentRef,
         packages: pkgById as Record<string, Row<Package>>,
+        durations: Object.fromEntries(services.map((x) => [x.id, x.durationMin])),
         createdBy: user.email,
         createdByName: user.name,
       });
@@ -402,7 +403,7 @@ function Checkout() {
                               updateLine(l.key, { staffId: s?.id, staffName: s?.name });
                             }}
                           >
-                            <option value="">Terapis (opsional)</option>
+                            <option value="">Pilih fisioterapis</option>
                             {staff.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
@@ -411,6 +412,9 @@ function Checkout() {
                           </Select>
                         )}
                       </div>
+                    )}
+                    {l.kind === "service" && !l.bookingId && !l.staffId && (
+                      <p className="mt-2 text-[12px] text-amber">Pilih fisioterapis agar sesi ini tercatat untuk laporan terapi dan komisi.</p>
                     )}
 
                     {!l.voucherId && discounts.some((d) => fits(d, l.kind)) && (

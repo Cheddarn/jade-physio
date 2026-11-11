@@ -8,7 +8,7 @@ import { DEMO_MODE } from "@/lib/firebase";
 import { ROLE_LABEL } from "@/lib/roles";
 import { DemoRoleSwitch } from "@/components/AppShell";
 import { openSearch } from "@/components/CommandPalette";
-import { NAV, NAV_GROUPS } from "@/lib/nav";
+import { NAV, NAV_GROUPS, mobileTabs } from "@/lib/nav";
 import { ClockCard } from "@/components/Attendance";
 
 export default function LainnyaPage() {
@@ -17,7 +17,8 @@ export default function LainnyaPage() {
   const can = useCan();
   // Everything the bottom bar on phones has no room for.
   const visible = NAV.filter((n) => !n.cap || can(n.cap));
-  const rest = visible.slice(4);
+  const tabs = mobileTabs(user.role, visible);
+  const rest = visible.filter((n) => !tabs.includes(n));
   const sections = [
     ...(can("checkout") ? [{ id: "aksi", label: "Aksi cepat", items: [{ href: "/checkout", label: "Transaksi baru", sub: "Jual layanan atau paket tanpa booking", icon: ShoppingBag }] }] : []),
     ...NAV_GROUPS.map((g) => ({ id: g.id, label: g.label, items: rest.filter((n) => n.group === g.id) })),
@@ -39,7 +40,7 @@ export default function LainnyaPage() {
         )}
         {sections.map((g) => (
           <section key={g.id}>
-            <h2 className="mb-2 px-1 text-[12px] font-bold tracking-wide text-muted uppercase">{g.label}</h2>
+            <h2 className="mb-2 px-1 text-[13px] font-semibold text-muted">{g.label}</h2>
             <Card className="divide-y divide-line-soft">
               {g.items.map(({ href, label, sub, icon: Icon }) => (
                 <Link key={href} href={href} className="flex items-center gap-3 px-4 py-3.5 active:bg-canvas">

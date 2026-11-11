@@ -7,13 +7,14 @@ import { useSearchParams } from "next/navigation";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCopy, Download, FileText, MessageCircle, Pencil, Printer, Send } from "lucide-react";
 import { Badge, Button, Card, Empty, IconButton, Segmented, Spinner, Switch, errorText, useToast } from "@/components/ui";
 import { ReportSheet, fileSize } from "@/components/ReportSheet";
+import { ReportBacklog } from "@/components/ReportBacklog";
 import { DatePicker } from "@/components/DatePicker";
 import { waLink } from "@/components/CustomerPicker";
 import { useCan, useUser } from "@/lib/auth";
 import { useCollection } from "@/lib/hooks";
 import { STATUS_LABEL, addDays, dateKey, fromDateKey, shortDate, staffColor, time } from "@/lib/format";
 import { useStaff } from "@/lib/hooks";
-import { dayListText, markReportSent, reportMessage, reportOwed, reportWritable, toBlobUrl } from "@/lib/reports";
+import { dayListText, flagMissingReports, markReportSent, reportMessage, reportOwed, reportWritable, toBlobUrl } from "@/lib/reports";
 import { useSettings } from "@/lib/settings";
 import type { Row } from "@/lib/store";
 import type { Booking, TherapyReport, Visit } from "@/lib/types";
@@ -45,6 +46,18 @@ function Reports() {
   const { rows: bookingRows, loading } = useCollection<Booking>("bookings", [["dateKey", "==", day]]);
   const { rows: reportRows } = useCollection<TherapyReport>("reports", [["dateKey", "==", day]]);
   const { rows: visitRows } = useCollection<Visit>("visits", [["dateKey", "==", day]]);
+
+  // Sessions finished before unwritten reports were tracked across days: the desk's device marks them once.
+  useEffect(() => {
+    if (!desk) return;
+    try {
+      if (window.sessionStorage.getItem("jade-physio-report-flags")) return;
+      window.sessionStorage.setItem("jade-physio-report-flags", "1");
+    } catch {
+      return;
+    }
+    flagMissingReports().catch(() => {});
+  }, [desk]);
 
   // Opened from a "Buat laporan" button elsewhere.
   const wanted = params.get("booking");
@@ -112,7 +125,7 @@ function Reports() {
         <div>
           <h1 className="text-[22px] leading-tight font-bold tracking-[-0.01em] md:text-[26px]">Laporan terapi</h1>
           <p className="mt-1 text-sm text-muted">
-            {therapist ? "Wajib dibuat untuk setiap pasien setelah sesi selesai." : "Laporan fisioterapis untuk dikirim ke pasien."}
+            {therapist ? "Wajib dibuat di hari yang sama, untuk setiap pasien setelah sesi selesai." : "Laporan fisioterapis untuk dikirim ke pasien."}
           </p>
         </div>
         {desk && (
@@ -124,6 +137,8 @@ function Reports() {
           </div>
         )}
       </div>
+
+      <ReportBacklog className="mt-5" />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <IconButton label="Hari sebelumnya" onClick={() => setDay(addDays(day, -1))}>

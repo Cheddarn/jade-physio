@@ -9,6 +9,7 @@ import { tasksFor, type Task, type VisitRow } from "@/lib/flow";
 import { isRoutineSeenKey, lastRoutineAt, readRoutineSeen, useDueMemos, writeRoutineSeen } from "@/lib/memos";
 import { hoursOn, useSettings } from "@/lib/settings";
 import { restockStatus } from "@/lib/restock";
+import { lateText } from "@/lib/reports";
 import type { Row } from "@/lib/store";
 import type { Booking, BookingRequest, Memo, RestockItem, Routine, TherapyReport, Visit } from "@/lib/types";
 import { useToast } from "./ui";
@@ -28,6 +29,10 @@ interface AlertsApi {
   badges: Record<string, number>;
   /** Bookings today that already have a therapy report. */
   reported: Set<string>;
+  /** Finished sessions still without a therapy report, from any day, oldest first. A physio sees their own. */
+  owed: Row<Booking>[];
+  /** Don't ping for this alert: the person is already dealing with it. */
+  mute: (id: string) => void;
   sound: boolean;
   setSound: (on: boolean) => void;
   notifyAllowed: boolean | null; // null: browser has no notifications
@@ -44,6 +49,8 @@ const Ctx = createContext<AlertsApi>({
   visits: null,
   badges: {},
   reported: new Set(),
+  owed: [],
+  mute: () => {},
   sound: true,
   setSound: () => {},
   notifyAllowed: null,
@@ -123,16 +130,18 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   const { rows: bookings } = useCollection<Booking>(clinical ? "bookings" : null, [["dateKey", "==", today]]);
   const { rows: reportRows } = useCollection<TherapyReport>(clinical ? "reports" : null, [["dateKey", "==", today]]);
   const reported = useMemo(() => new Set((reportRows ?? []).map((r) => r.bookingId)), [reportRows]);
+  // Sessions from earlier days that still owe one: a report left for "later" keeps counting until it is written.
+  const { rows: backlog } = useCollection<Booking>(clinical ? "bookings" : null, [["reportDue", "==", true]]);
   const missing = useMemo(() => {
     const finished = new Set((visits ?? []).filter((v) => v.stage === "finished" && v.bookingId).map((v) => v.bookingId!));
-    return (bookings ?? []).filter(
-      (b) =>
-        b.status !== "cancelled" &&
-        (b.status === "paid" || finished.has(b.id)) &&
-        !reported.has(b.id) &&
-        (user.role !== "therapist" || b.staffId === user.staffId),
+    const mine = (b: Booking) => user.role !== "therapist" || b.staffId === user.staffId;
+    const todays = (bookings ?? []).filter(
+      (b) => b.status !== "cancelled" && (b.status === "paid" || finished.has(b.id)) && !reported.has(b.id) && mine(b),
     );
-  }, [bookings, visits, reported, user]);
+    const seen = new Set(todays.map((b) => b.id));
+    const older = (backlog ?? []).filter((b) => b.status !== "cancelled" && !seen.has(b.id) && !reported.has(b.id) && mine(b));
+    return [...older, ...todays].sort((a, b) => a.startAt - b.startAt);
+  }, [bookings, backlog, visits, reported, user]);
   const reportTasks = useMemo<Task[]>(
     () =>
       user.role !== "therapist"
@@ -140,10 +149,10 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
         : missing.map((b) => ({
             id: `${b.id}:report`,
             visitId: (visits ?? []).find((v) => v.bookingId === b.id)?.id ?? "",
-            title: "Buat laporan terapi",
+            title: b.dateKey < today ? `Laporan terapi tertunggak (${lateText(b, today).toLowerCase()})` : "Buat laporan terapi",
             body: `${b.customerName}, ${b.serviceName}`,
           })),
-    [missing, visits, user.role],
+    [missing, visits, user.role, today],
   );
 
   // Physios: a new booking with them (made at the desk, or a patient's request confirmed), and patients asking for them.
@@ -344,6 +353,11 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   // Alert only for what appears after the first load, once each. A short pause lets related writes land
   // (a walk-in's booking and its visit), so one change gives one alert.
   const seen = useRef<Set<string> | null>(null);
+  const muted = useRef(new Set<string>());
+  const mute = useCallback((id: string) => {
+    muted.current.add(id);
+    seen.current?.add(id);
+  }, []);
   const soundRef = useRef(sound);
   soundRef.current = sound;
   const latest = useRef(alerts);
@@ -356,7 +370,7 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
         seen.current = new Set(list.map((t) => t.id));
         return;
       }
-      const fresh = list.filter((t) => !seen.current!.has(t.id));
+      const fresh = list.filter((t) => !seen.current!.has(t.id) && !muted.current.has(t.id));
       list.forEach((t) => seen.current!.add(t.id));
       if (!fresh.length) return;
       if (soundRef.current) chime();
@@ -387,8 +401,8 @@ export function FlowAlertsProvider({ children }: { children: ReactNode }) {
   }, [tasks.length]);
 
   const value = useMemo(
-    () => ({ tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine }),
-    [tasks, visits, badges, reported, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine],
+    () => ({ tasks, visits, badges, reported, owed: missing, mute, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine }),
+    [tasks, visits, badges, reported, missing, mute, sound, setSound, notifyAllowed, askNotify, memos, routines, confirmRoutine],
   );
   return (
     <Ctx.Provider value={value}>

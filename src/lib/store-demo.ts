@@ -4,7 +4,7 @@ import { addDays, atTime, dateKey } from "./format";
 type Doc = Record<string, unknown>;
 type Data = Record<string, Record<string, Doc>>;
 
-const KEY = "jade-physio-demo-v8";
+const KEY = "jade-physio-demo-v10";
 let data: Data | null = null;
 const listeners = new Set<() => void>();
 
@@ -158,6 +158,7 @@ function seed(): Data {
   const d: Data = {
     staff: {}, services: {}, packages: {}, customers: {}, bookings: {}, vouchers: {}, sales: {}, meta: {}, access: {}, visits: {},
     team: {}, attendance: {}, reports: {}, restock: {}, requests: {}, accounts: {}, discounts: {}, receipts: {}, memos: {}, expenses: {},
+    payDays: {},
   };
   const staff = [
     { id: "st1", name: "Ft. Andini", color: "jade", gender: "P" },
@@ -197,6 +198,16 @@ function seed(): Data {
     ["Yoga Firmansyah", "0822 9910 3345", "L"],
     ["Lina Kusuma", "0812 3345 8870", "P"],
     ["Rizky Hidayat", "0856 7712 0098", "L"],
+    ["Indah Permatasari", "0812 2290 4417", "P"],
+    ["Arif Budiman", "0813 8871 2209", "L"],
+    ["Nurul Hidayah", "0857 6612 3380", "P"],
+    ["Eko Prasetyo", "0811 3340 9982", "L"],
+    ["Fitri Handayani", "0821 9987 1120", "P"],
+    ["Joko Susanto", "0812 5567 8843", "L"],
+    ["Ayu Lestari", "0878 1123 4456", "P"],
+    ["Bambang Hartono", "0819 7780 2231", "L"],
+    ["Citra Kirana", "0813 4459 6670", "P"],
+    ["Gilang Ramadhan", "0822 3318 9904", "L"],
   ];
   const complaints = [
     "Nyeri punggung bawah setelah angkat galon",
@@ -210,7 +221,8 @@ function seed(): Data {
   const today = dateKey(now);
   const customers = names.map(([name, phone, gender], i) => {
     const id = `cu${i + 1}`;
-    const createdAt = now - (60 - i) * 86_400_000;
+    // Patients from before this history starts, so they count as returning.
+    const createdAt = now - (150 - i * 3) * 86_400_000;
     d.customers[id] = {
       name, nameLower: name.toLowerCase(), phone, gender, createdAt,
       ...(i < 8 ? { profile: {
@@ -291,10 +303,10 @@ function seed(): Data {
   addVoucher(customers[11], packages[2], 1, 52);
   addVoucher(customers[3], packages[0], 2, 84);
 
-  // Past 30 days of paid visits
-  for (let day = 30; day >= 1; day--) {
+  // Past 60 days of paid visits, a little busier in the last month
+  for (let day = 60; day >= 1; day--) {
     const key = addDays(today, -day);
-    const visits = 5 + Math.floor(rnd() * 7);
+    const visits = (day > 30 ? 4 : 5) + Math.floor(rnd() * (day > 30 ? 5 : 7));
     for (let v = 0; v < visits; v++) {
       const cu = pick(customers);
       const sv = pick(services);
@@ -608,7 +620,6 @@ function seed(): Data {
   disc("dc3", "Promo paket Rp 100.000", "flat", 100000, "package", { validUntil: addDays(today, 24) });
   disc("dc4", "Potongan kenalan Rp 25.000", "flat", 25000, "bill");
 
-  d.meta.counters = { [`inv${new Date(now).getFullYear()}`]: inv, rm: 8 };
   const since = now - 90 * 86_400_000;
   d.access["admin@jadephysio.id"] = { role: "admin", name: "Admin Demo", addedAt: since };
   d.access["manajer@jadephysio.id"] = { role: "manager", name: "Manajer Demo", addedAt: since + 3_600_000 };
@@ -629,5 +640,138 @@ function seed(): Data {
   memo("mm2", today, onHour(Math.min(now + 2 * 3_600_000, atTime(today, "23:00"))), "Telepon distributor alat TENS, tanyakan jadwal kiriman");
   memo("mm3", addDays(today, 1), "09:00", "Bayar tagihan listrik dan internet klinik");
   memo("mm4", addDays(today, -1), "16:00", "Kirim rekap pemasukan minggu ini ke pemilik", ["manajer@jadephysio.id", "Manajer Demo", now - 20 * 3_600_000]);
+
+  // ---- New patients this fortnight, so the dashboard has new and returning patients to tell apart ----
+  const DAY = 86_400_000;
+  const newcomers: [name: string, phone: string, gender: string, firstAgo: number, source: string, online: boolean, again: number | null][] = [
+    ["Sekar Maharani", "0812 4471 9902", "P", 12, "instagram", false, 5],
+    ["Bayu Aditya", "0813 9920 1175", "L", 10, "teman", false, 3],
+    ["Ratna Dewanti", "0857 3348 2210", "P", 9, "google", true, null],
+    ["Ilham Saputra", "0821 7765 4409", "L", 7, "tiktok", true, 2],
+    ["Melati Kusumawardani", "0878 2201 6634", "P", 6, "instagram", false, null],
+    ["Dimas Prakoso", "0819 5540 7781", "L", 4, "dokter", false, 1],
+    ["Anjani Putri", "0812 9087 1123", "P", 3, "tiktok", true, null],
+    ["Reza Mahendra", "0856 1120 3398", "L", 2, "teman", false, null],
+    ["Kartika Sari", "0813 6654 8820", "P", 1, "instagram", false, null],
+  ];
+  newcomers.forEach(([name, phone, gender, firstAgo, source, online, again], i) => {
+    const id = `cu${names.length + lapsed.length + i + 1}`;
+    const first = atTime(addDays(today, -firstAgo), `${10 + (i % 6)}:${i % 2 ? "30" : "00"}`);
+    d.customers[id] = {
+      name, nameLower: name.toLowerCase(), phone, gender, createdAt: first - 2 * 3_600_000, source: online ? "online" : "klinik",
+      profile: {
+        medicalRecordNo: `RM-${String(9 + i).padStart(6, "0")}`, registeredAt: first - 3_600_000, birthDate: `${1975 + ((i * 5) % 30)}-0${(i % 9) + 1}-2${i % 8}`,
+        firstVisit: "ya", insurance: "tidak", complaint: complaints[i % complaints.length], sources: [source], consent: true, consentAt: first - 3_600_000,
+      },
+    };
+    for (const ago of [firstAgo, again]) {
+      if (ago == null) continue;
+      const key = addDays(today, -ago);
+      const start = ago === firstAgo ? first : atTime(key, `${11 + (i % 5)}:00`);
+      const sv = services[i % 2];
+      const st = staff[(i + (ago === firstAgo ? 0 : 1)) % staff.length];
+      const bookingId = rid();
+      const saleId = rid();
+      const invoiceNo = invNo();
+      d.bookings[bookingId] = {
+        customerId: id, customerName: name, customerPhone: phone, staffId: st.id, staffName: st.name,
+        serviceId: sv.id, serviceName: sv.name, price: sv.price, startAt: start, durationMin: sv.durationMin,
+        dateKey: key, status: "paid", saleId, invoiceNo, createdAt: start - 3_600_000, notes: complaints[i % complaints.length],
+      };
+      d.sales[saleId] = {
+        invoiceNo, customerId: id, customerName: name, customerPhone: phone, bookingId,
+        items: [{ kind: "service", refId: sv.id, name: sv.name, qty: 1, unitPrice: sv.price, amount: sv.price, staffId: st.id, staffName: st.name, bookingId }],
+        subtotal: sv.price, voucherCovered: 0, discount: 0, total: sv.price, paymentMethod: pick(methods), status: "paid",
+        createdAt: start + sv.durationMin * 60_000, dateKey: key, createdBy: "admin@jadephysio.id",
+      };
+    }
+  });
+  d.meta.counters = { [`inv${new Date(now).getFullYear()}`]: inv, rm: 8 + newcomers.length };
+
+  // ---- Commission rules, and two working days on which Ft. Bagus had no patients ----
+  const rules = {
+    enabled: true, since: addDays(today, -45), holdUntilReport: true,
+    defaultRate: { type: "percent", value: 10 },
+    rates: { sv4: { type: "percent", value: 12 }, sv3: { type: "flat", value: 30000 }, sv5: { type: "flat", value: 20000 } } as Record<string, { type: string; value: number }>,
+    staffOff: [] as string[],
+    compensation: { enabled: true, amount: 50000, since: addDays(today, -45), basis: "attendance" },
+  };
+  d.meta.commission = rules;
+  const earns = (b: Doc) => {
+    const r = rules.rates[b.serviceId as string] ?? rules.defaultRate;
+    return { type: r.type, value: r.value, amount: r.type === "percent" ? Math.round(((b.price as number) * r.value) / 100) : r.value };
+  };
+  const bagusDays = Object.values(d.attendance)
+    .filter((a) => a.email === "bagus@jadephysio.id" && a.dateKey !== today)
+    .map((a) => a.dateKey as string)
+    .sort()
+    .reverse();
+  const idle = [bagusDays[2], bagusDays[6]].filter(Boolean);
+  for (const b of Object.values(d.bookings)) {
+    if (b.staffId !== "st2" || !idle.includes(b.dateKey as string)) continue;
+    b.staffId = "st3";
+    b.staffName = "Ft. Clara";
+    const sale = d.sales[b.saleId as string] as { items?: Doc[] } | undefined;
+    for (const it of sale?.items ?? []) if (it.staffId === "st2") Object.assign(it, { staffId: "st3", staffName: "Ft. Clara" });
+  }
+  // A day the manager set by hand: Ft. Andini came in on her day off.
+  const sunday = Array.from({ length: 7 }, (_, i) => addDays(today, -1 - i)).find((k) => new Date(`${k}T12:00:00`).getDay() === 0);
+  if (sunday)
+    d.payDays[`st1_${sunday}`] = {
+      staffId: "st1", dateKey: sunday, compensation: 75000, note: "Jaga stan pameran kesehatan", by: "manajer@jadephysio.id", byName: "Manajer Demo", at: now - DAY,
+    };
+
+  // ---- Every finished session: when it ended, its report, its commission. A few reports are late or still missing ----
+  const writer: Record<string, string> = { st1: "andini@jadephysio.id", st2: "bagus@jadephysio.id", st3: "clara@jadephysio.id", st4: "dimas@jadephysio.id" };
+  const past = Object.entries(d.bookings)
+    .filter(([, b]) => b.status === "paid")
+    .sort((a, b) => (a[1].startAt as number) - (b[1].startAt as number));
+  // Still owed: two of Ft. Andini's from yesterday and the day before, one each for two colleagues.
+  const owedBy: Record<string, number> = { st1: 2, st2: 1, st3: 1 };
+  const owed = new Set<string>();
+  for (const [id, b] of [...past].reverse()) {
+    const ago = Math.round((atTime(today, "12:00") - atTime(b.dateKey as string, "12:00")) / DAY);
+    if (ago < 1 || ago > 4 || !owedBy[b.staffId as string]) continue;
+    owedBy[b.staffId as string]--;
+    owed.add(id);
+  }
+  // Ft. Clara tends to write hers the next morning.
+  const lateShare: Record<string, number> = { st1: 0.05, st2: 0.1, st3: 0.3, st4: 0.12 };
+  for (const [id, b] of past) {
+    const endedAt = (b.startAt as number) + (b.durationMin as number) * 60_000;
+    b.endedAt = endedAt;
+    b.commission = earns(b);
+    const existing = d.reports[id] as Doc | undefined;
+    if (!existing && (owed.has(id) || b.dateKey === today)) {
+      b.reportDue = true;
+      b.reportAt = null;
+      continue;
+    }
+    const late = b.dateKey !== today && rnd() < (lateShare[b.staffId as string] ?? 0.1);
+    const createdAt = existing ? (existing.createdAt as number) : late ? atTime(addDays(b.dateKey as string, 1 + Math.floor(rnd() * 2)), "09:20") : endedAt + (8 + Math.floor(rnd() * 70)) * 60_000;
+    if (!existing)
+      d.reports[id] = {
+        bookingId: id, visitId: null, customerId: b.customerId, customerName: b.customerName, customerPhone: b.customerPhone,
+        staffId: b.staffId, staffName: b.staffName, serviceName: b.serviceName, dateKey: b.dateKey, sessionAt: b.startAt,
+        complaint: (b.notes as string) || pick(complaints),
+        assessment: pick(["ROM terbatas, nyeri tekan lokal, kekuatan otot 4/5.", "Spasme otot paravertebral, nyeri gerak fleksi.", "Bengkak berkurang, ROM membaik dibanding sesi lalu."]),
+        treatment: pick(["TENS, Ultrasound, Stretching", "Infrared, Manual terapi, Exercise terapi", "Dry needling, Mobilisasi sendi", "Manual terapi, Penguatan otot, Kinesio taping"]),
+        advice: pick(["Kompres hangat 2x sehari 15 menit, Latihan peregangan pagi dan sore", "Hindari angkat beban berat, Perbaiki posisi duduk", "Kompres es 10 menit bila nyeri, Istirahat cukup"]),
+        nextVisit: pick(["3 hari lagi", "1 minggu lagi", "2 hari lagi"]),
+        file: null, createdAt, createdBy: writer[b.staffId as string], updatedAt: createdAt,
+        sentAt: rnd() < 0.7 ? createdAt + 3_600_000 : null, sentBy: "kasir@jadephysio.id",
+      };
+    b.reportDue = false;
+    b.reportAt = createdAt;
+  }
+
+  // ---- First session per patient. The regulars were patients before this history starts ----
+  const firstOf = new Map<string, number>();
+  for (const [, b] of past) if (!firstOf.has(b.customerId as string)) firstOf.set(b.customerId as string, b.startAt as number);
+  for (const [id, c] of Object.entries(d.customers)) {
+    const n = Number(id.slice(2));
+    const first = n <= names.length ? (c.createdAt as number) + DAY : firstOf.get(id);
+    if (first) c.firstSessionAt = first;
+  }
   return JSON.parse(JSON.stringify(d));
 }

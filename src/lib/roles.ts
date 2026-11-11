@@ -29,8 +29,8 @@ export const ROLE_SHORT: Record<Role, string> = {
 
 export const ROLE_HINT: Record<Role, string> = {
   admin: "Front desk. Semua menu, termasuk laporan pemasukan, katalog, pembatalan faktur, dan pengaturan akses. Tidak melihat harga restock dan laba.",
-  manager: "Semua menu operasional, laporan, katalog, dan pembatalan faktur, plus memproses restock dan melihat biaya serta laba. Tidak bisa mengatur akses login.",
-  therapist: "Alur pasien dan jadwal sendiri, keluhan pasien. Memulai dan menyelesaikan sesi, tanpa akses ke uang.",
+  manager: "Dasbor, semua menu operasional, laporan, katalog, dan pembatalan faktur, plus memproses restock, melihat biaya serta laba, dan mengatur komisi fisioterapis. Tidak bisa mengatur akses login.",
+  therapist: "Alur pasien dan jadwal sendiri, keluhan pasien, laporan terapi, dan komisi sendiri. Memulai dan menyelesaikan sesi, tanpa akses ke uang klinik.",
   cleaning: "Hanya tugas sepatu pasien di Alur pasien: ganti sepatu saat datang, kembalikan saat selesai.",
   patient: "Akun pasien: booking sendiri untuk dirinya dan keluarganya. Pasien biasanya mendaftar sendiri.",
 };
@@ -62,6 +62,8 @@ export type Cap =
   | "memos" // the desk's own dated reminders on the calendar
   | "restock.manage" // process restock requests: name, quantity, price, ordered
   | "profit" // costs, gross and net profit
+  | "commission" // the commission page: the manager sees everyone, a physio their own
+  | "commission.manage" // rates, on/off, daily compensation
   | "portal";
 
 const ALL: Cap[] = [
@@ -91,15 +93,17 @@ const ALL: Cap[] = [
   "memos",
   "restock.manage",
   "profit",
+  "commission",
+  "commission.manage",
 ];
 
-/** Only the manager: buying stock, costs and profit. Admin, the front desk, does everything else. */
-const MANAGER_ONLY: Cap[] = ["restock.manage", "profit"];
+/** Only the manager: buying stock, costs, profit and what the physios are paid. Admin, the front desk, does everything else. */
+const MANAGER_ONLY: Cap[] = ["restock.manage", "profit", "commission", "commission.manage"];
 
 const CAPS: Record<Role, Cap[]> = {
   admin: ALL.filter((c) => !MANAGER_ONLY.includes(c)),
   manager: ALL.filter((c) => c !== "team"),
-  therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock"],
+  therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock", "commission"],
   cleaning: ["flow.view", "restock"],
   patient: ["portal"],
 };
@@ -121,6 +125,7 @@ export const ROUTE_CAP: [prefix: string, cap: Cap][] = [
   ["/voucher", "vouchers.view"],
   ["/laporan", "reports"],
   ["/laba", "profit"],
+  ["/komisi", "commission"],
   ["/katalog", "catalog"],
   ["/template-wa", "templates"],
   ["/pengingat", "memos"],
@@ -134,7 +139,8 @@ export function routeAllowed(role: Role | undefined, path: string) {
 
 /** Where everyone lands after signing in. */
 export const HOME = "/alur";
-export const homeFor = (role?: Role) => (role === "patient" ? "/portal" : HOME);
+/** The manager opens on the dashboard; the people on the floor open on the patient board. */
+export const homeFor = (role?: Role) => (role === "patient" ? "/portal" : role === "manager" ? "/ringkasan" : HOME);
 
 /** Starting / undoing a session: the desk (admin, manager) for anyone, therapists only for their own patients. */
 export const canRunSession = (u: { role: Role; staffId?: string }, b: { staffId?: string }) =>

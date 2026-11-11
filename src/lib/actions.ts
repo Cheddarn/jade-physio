@@ -1,6 +1,7 @@
 import { store, type Row } from "./store";
 import { dateKey, remaining, voucherCode } from "./format";
 import { discountAmount } from "./discounts";
+import { earnedAt, loadCommission } from "./commission";
 import type {
   Booking,
   BookingStatus,
@@ -15,6 +16,7 @@ import type {
   SaleItem,
   Service,
   Staff,
+  TherapyReport,
   Voucher,
 } from "./types";
 
@@ -214,6 +216,8 @@ export interface CheckoutInput {
   paymentMethod: PaymentMethod | null;
   paymentRef?: string;
   packages: Record<string, Row<Package>>;
+  /** Session length per service id, for services sold here without a booking. */
+  durations?: Record<string, number>;
   createdBy: string;
   createdByName?: string;
 }
@@ -308,6 +312,24 @@ export async function checkout(input: CheckoutInput) {
   if (totals.total > 0 && !input.paymentMethod) throw new Error("Pilih metode pembayaran.");
 
   const saleId = store.newId("sales");
+  // What each session pays its physio is frozen now, so changing the rates later leaves it alone.
+  const commission = await loadCommission();
+  // A service sold here without a booking still happened: it gets a session of its own, for the report and the commission.
+  const walkIns = new Map<string, string>();
+  for (const l of input.lines) if (l.kind === "service" && !l.bookingId && l.staffId) walkIns.set(l.key, store.newId("bookings"));
+  const bookingOf = (l: CartLine) => l.bookingId ?? walkIns.get(l.key);
+  // A patient from before first sessions were recorded: look up their earliest paid session once,
+  // so a long-time patient is not taken for a new one at this checkout.
+  let earlier: number | null = null;
+  if (!input.customer.firstSessionAt && input.lines.some((l) => l.kind === "service" && bookingOf(l))) {
+    try {
+      const past = await store.list<Booking>("bookings", [["customerId", "==", input.customer.id]]);
+      const paid = past.filter((b) => b.status === "paid").map((b) => b.startAt);
+      if (paid.length) earlier = Math.min(...paid);
+    } catch {
+      /* the session being paid now stands in */
+    }
+  }
   // Pre-allocate ids for vouchers bought in this checkout.
   const newVoucherIds: Record<string, string[]> = {};
   for (const l of input.lines) {
@@ -334,11 +356,22 @@ export async function checkout(input: CheckoutInput) {
     const bookingIds = [...new Set(input.lines.map((l) => l.bookingId).filter(Boolean))] as string[];
     // Also when each session took place, for the receipt.
     const sessionAt = new Map<string, number>();
+    const booked = new Map<string, Row<Booking>>();
     for (const id of bookingIds) {
       const b = await tx.get<Booking>("bookings", id);
       if (b?.status === "paid") throw new Error("Booking ini sudah dibayar.");
-      if (b) sessionAt.set(id, b.startAt);
+      if (b) {
+        sessionAt.set(id, b.startAt);
+        booked.set(id, b);
+      }
     }
+    const reported = new Map<string, number>();
+    for (const id of booked.keys()) {
+      const r = await tx.get<TherapyReport>("reports", id);
+      if (r) reported.set(id, r.createdAt);
+    }
+    const hasSession = booked.size > 0 || walkIns.size > 0;
+    const patient = hasSession ? await tx.get<Customer>("customers", input.customer.id) : null;
 
     // ---- writes ----
     const n = (Number(counters[`inv${year}`]) || 0) + 1;
@@ -355,7 +388,7 @@ export async function checkout(input: CheckoutInput) {
         if (!vid) throw new Error("Paket untuk voucher baru tidak ada di keranjang.");
         const list = newVoucherUse.get(vid) ?? [];
         for (let i = 0; i < l.qty; i++)
-          list.push({ saleId, invoiceNo, bookingId: l.bookingId, serviceName: l.name, staffName: l.staffName, at: now });
+          list.push({ saleId, invoiceNo, bookingId: bookingOf(l), serviceName: l.name, staffName: l.staffName, at: now });
         newVoucherUse.set(vid, list);
       }
     }
@@ -377,7 +410,7 @@ export async function checkout(input: CheckoutInput) {
         discountName: disc && l.discountId ? input.discounts[l.discountId]?.name : undefined,
         staffId: l.staffId,
         staffName: l.staffName,
-        bookingId: l.bookingId,
+        bookingId: bookingOf(l),
         voucherId,
         voucherCode,
         issuedVoucherIds: l.kind === "package" ? newVoucherIds[l.key] : undefined,
@@ -428,7 +461,7 @@ export async function checkout(input: CheckoutInput) {
           Array.from({ length: l.qty }, () => ({
             saleId,
             invoiceNo,
-            bookingId: l.bookingId,
+            bookingId: bookingOf(l),
             serviceName: l.name,
             staffName: l.staffName,
             at: now,
@@ -471,7 +504,51 @@ export async function checkout(input: CheckoutInput) {
     tx.set("sales", saleId, sale);
     tx.set("receipts", token, receiptFrom(saleId, sale, sessionAt));
 
-    for (const id of bookingIds) tx.update("bookings", id, { status: "paid", saleId, invoiceNo });
+    for (const [id, b] of booked) {
+      const reportAt = b.reportAt ?? reported.get(id) ?? null;
+      tx.update("bookings", id, {
+        status: "paid",
+        saleId,
+        invoiceNo,
+        endedAt: b.endedAt ?? now,
+        reportDue: !reportAt,
+        reportAt,
+        commission: earnedAt(commission, b),
+      });
+    }
+    for (const l of input.lines) {
+      const id = walkIns.get(l.key);
+      if (!id) continue;
+      const durationMin = input.durations?.[l.refId] ?? 60;
+      const b: Booking = {
+        customerId: input.customer.id,
+        customerName: input.customer.name,
+        customerPhone: input.customer.phone,
+        staffId: l.staffId!,
+        staffName: l.staffName ?? "",
+        serviceId: l.refId,
+        serviceName: l.qty > 1 ? `${l.name} ×${l.qty}` : l.name,
+        price: l.unitPrice * l.qty,
+        // Paid right after the session, so it is placed just before now.
+        startAt: now - durationMin * 60_000,
+        durationMin,
+        dateKey: dateKey(now),
+        status: "paid",
+        saleId,
+        invoiceNo,
+        createdAt: now,
+        endedAt: now,
+        reportDue: true,
+        reportAt: null,
+        walkIn: true,
+      };
+      tx.set("bookings", id, { ...b, commission: earnedAt(commission, b) });
+    }
+    // The first session ever is what tells a new patient from a returning one.
+    if (patient && !patient.firstSessionAt) {
+      const first = Math.min(...(earlier ? [earlier] : []), ...[...booked.values()].map((b) => b.startAt), ...(walkIns.size ? [now] : []));
+      tx.update("customers", input.customer.id, { firstSessionAt: first });
+    }
 
     return { saleId, invoiceNo, receiptToken: token };
   });
@@ -497,6 +574,11 @@ export async function voidSale(saleId: string, reason: string) {
       const usedElsewhere = (v?.redemptions ?? []).some((r) => r.saleId !== saleId);
       if (usedElsewhere) throw new Error(`Voucher ${v!.code} dari faktur ini sudah dipakai di kunjungan lain.`);
     }
+    const sessions = new Map<string, Row<Booking>>();
+    for (const id of new Set(sale.items.map((i) => i.bookingId).filter(Boolean) as string[])) {
+      const b = await tx.get<Booking>("bookings", id);
+      if (b) sessions.set(id, b);
+    }
 
     for (const id of issued) {
       if (vouchers.has(id)) tx.update("vouchers", id, { status: "void" });
@@ -512,8 +594,12 @@ export async function voidSale(saleId: string, reason: string) {
         status: v.status === "void" ? "void" : "active",
       });
     }
-    const bookingIds = [...new Set(sale.items.map((i) => i.bookingId).filter(Boolean))] as string[];
-    for (const id of bookingIds) tx.update("bookings", id, { status: "booked", saleId: null, invoiceNo: null });
+    for (const [id, b] of sessions) {
+      // A session that only existed because of this invoice goes with it; a booked one waits for a new checkout.
+      // Either way the commission it had is dropped, and frozen again when it is paid again.
+      if (b.walkIn) tx.update("bookings", id, { status: "cancelled", saleId: null, invoiceNo: null, commission: null, reportDue: false });
+      else tx.update("bookings", id, { status: "booked", saleId: null, invoiceNo: null, commission: null });
+    }
 
     tx.update("sales", saleId, { status: "void", voidReason: reason.trim(), voidedAt: Date.now() });
     // The patient's online receipt shows it was cancelled.

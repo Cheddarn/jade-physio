@@ -7,7 +7,7 @@ import { Ellipsis, LogOut, ShoppingBag } from "lucide-react";
 import { cx } from "./ui";
 import { useAuth, useCan, useUser } from "@/lib/auth";
 import { ROLES, ROLE_LABEL, ROLE_SHORT, type Role } from "@/lib/roles";
-import { NAV, NAV_GROUPS } from "@/lib/nav";
+import { NAV, NAV_GROUPS, mobileTabs } from "@/lib/nav";
 import { CommandPalette, SearchButton } from "./CommandPalette";
 import { FlowAlertsProvider, useFlowAlerts } from "./FlowAlerts";
 import { ClockCard } from "./Attendance";
@@ -40,7 +40,7 @@ function TaskCount({ href, className }: { href: string; className?: string }) {
   if (!n) return null;
   return (
     <span
-      className={cx("tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-white", className)}
+      className={cx("tnum inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[11px] leading-none font-bold text-white", className)}
       aria-label={`${n} perlu ditindaklanjuti`}
     >
       {n}
@@ -55,7 +55,7 @@ function Shell({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
   const nav = NAV.filter((n) => !n.cap || can(n.cap));
   const groups = NAV_GROUPS.map((g) => ({ ...g, items: nav.filter((n) => n.group === g.id) })).filter((g) => g.items.length);
-  const mobileNav = nav.slice(0, 4);
+  const mobileNav = mobileTabs(user.role, nav);
   const active = (href: string) => path === href || path.startsWith(href + "/");
   const moreActive = !mobileNav.some((n) => active(n.href)) && !active("/checkout");
   const tabCols = mobileNav.length + 1;
@@ -65,7 +65,9 @@ function Shell({ children }: { children: ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface md:flex">
         <div className="px-5 pt-5 pb-4">
-          <Logo />
+          <Link href="/" aria-label="Ke halaman awal">
+            <Logo />
+          </Link>
         </div>
         {can("checkout") && (
         <div className="px-3 pb-3">
@@ -86,7 +88,7 @@ function Shell({ children }: { children: ReactNode }) {
         <nav aria-label="Menu utama" className="scroll-thin flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2">
           {groups.map((g) => (
             <div key={g.id} className="flex flex-col gap-0.5 pb-2">
-              {groups.length > 1 && <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-wide text-muted uppercase">{g.label}</p>}
+              {groups.length > 1 && <p className="px-3 pt-3 pb-1 text-[12px] font-semibold text-muted">{g.label}</p>}
               {g.items.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
@@ -172,23 +174,19 @@ export function DemoRoleSwitch({ className }: { className?: string }) {
   const user = useUser();
   const { setDemoRole } = useAuth();
   return (
-    <div className={cx("rounded-lg bg-amber-mist px-3 py-2", className)}>
-      <p className="text-xs font-semibold text-amber">Mode demo: lihat sebagai</p>
-      <div className="mt-1.5 grid grid-cols-3 gap-1">
+    <label className={cx("flex items-center gap-2 rounded-lg bg-amber-mist py-1.5 pr-1.5 pl-3 text-xs font-semibold text-amber", className)}>
+      <span className="min-w-0 flex-1 truncate">Mode demo</span>
+      <select
+        value={user.role}
+        onChange={(e) => setDemoRole(e.target.value as Role)}
+        className="h-7 rounded-md border-0 bg-surface px-1.5 !text-[12px] font-semibold text-ink shadow-sm"
+      >
         {ROLES.map((r: Role) => (
-          <button
-            key={r}
-            onClick={() => setDemoRole(r)}
-            aria-pressed={user.role === r}
-            className={cx(
-              "h-7 rounded-md px-1 text-[11px] font-semibold whitespace-nowrap transition-colors",
-              user.role === r ? "bg-surface text-ink shadow-sm" : "text-amber hover:bg-surface/60",
-            )}
-          >
+          <option key={r} value={r}>
             {ROLE_SHORT[r]}
-          </button>
+          </option>
         ))}
-      </div>
-    </div>
+      </select>
+    </label>
   );
 }
