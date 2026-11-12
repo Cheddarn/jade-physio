@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { Button, Field, Input, Sheet, Switch, Textarea, cx, errorText, useToast } from "./ui";
 import { CustomerPicker } from "./CustomerPicker";
+import { TherapistAdvice, useAutoPick } from "./TherapistAdvice";
+import { useAdvice } from "@/lib/assign";
 import { useCollection, usePackages, useServices, useStaff } from "@/lib/hooks";
 import { createBooking, updateBooking, voucherCovers, voucherState } from "@/lib/actions";
 import { atTime, dateKey, duration, hhmm, remaining, roundedNow, rupiah, shortDate, staffColor, validityText } from "@/lib/format";
@@ -94,6 +96,9 @@ export function BookingSheet({
   const activeVouchers = (custVouchers ?? []).filter((v) => voucherState(v) === "active");
 
   const isEdit = !!draft?.id;
+  // The patient's own physio, or for a new patient the same-gender physio with the fewest patients that month.
+  const adv = useAdvice({ enabled: open && !!customer, customer, day, want: customer?.gender, busy: load });
+  useAutoPick(adv.advice, staffId, setStaffId, open && !isEdit && !!customer);
   const service = services.find((s) => s.id === serviceId);
   const pickedVoucher = pick?.kind === "voucher" ? activeVouchers.find((v) => v.id === pick.id) ?? null : null;
   const pickedPackage = pick?.kind === "package" ? packages.find((p) => p.id === pick.id) ?? null : null;
@@ -350,6 +355,7 @@ export function BookingSheet({
             </Field>
 
             <Field label="Terapis" hint="Satu terapis bisa menangani beberapa pasien di jam yang sama.">
+              <TherapistAdvice advice={adv.advice} loads={adv.loads} staff={staff} selected={staffId} onUse={setStaffId} />
               <div className="flex flex-wrap gap-2">
                 {staff.map((s) => {
                   const c = staffColor(s.color);

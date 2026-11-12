@@ -6,6 +6,7 @@ import { Card, Spinner, cx } from "./ui";
 import { Delta, RankBars, SplitBar, StackedColumns, StatTile, VIZ } from "./Stats";
 import { previousRange, rangeDays } from "./DateRange";
 import { useCan } from "@/lib/auth";
+import { monthLoads, monthOf } from "@/lib/assign";
 import { payroll, useCommission, workdays } from "@/lib/commission";
 import { SOURCES, ageFrom } from "@/lib/flow";
 import { addDays, dateKey, dayMonth, fromDateKey, num, pad, rupiah, rupiahShort, shortDate, staffColor } from "@/lib/format";
@@ -421,6 +422,8 @@ export function Dashboard({ from, to }: { from: string; to: string }) {
         </Card>
       </div>
 
+      <MonthShare day={to > today ? today : to} customers={customers} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4 md:p-5">
           <h2 className="font-bold">Jam tersibuk</h2>
@@ -482,5 +485,61 @@ export function Dashboard({ from, to }: { from: string; to: string }) {
         )}
       </Card>
     </div>
+  );
+}
+
+/** How evenly the month's patients are shared out: what the therapist suggestion works from. */
+function MonthShare({ day, customers }: { day: string; customers: Row<Customer>[] }) {
+  const { staff } = useStaff();
+  const month = useMemo(() => monthOf(day), [day]);
+  const { rows } = useCollection<Booking>("bookings", spanOf(month.from, month.to));
+  const data = useMemo(() => {
+    const live = (rows ?? []).filter((b) => b.status !== "cancelled");
+    const loads = monthLoads(live);
+    const firstKey = new Map(customers.map((c) => [c.id, dateKey(c.firstSessionAt ?? c.createdAt)]));
+    return staff.map((s) => {
+      const mine = new Set(live.filter((b) => b.staffId === s.id).map((b) => b.customerId));
+      const fresh = [...mine].filter((id) => (firstKey.get(id) ?? "") >= month.from && (firstKey.get(id) ?? "") <= month.to).length;
+      return { s, patients: loads.get(s.id)?.patients ?? 0, sessions: loads.get(s.id)?.sessions ?? 0, fresh };
+    });
+  }, [rows, customers, staff, month]);
+  if (!rows || data.length < 2) return null;
+  const max = Math.max(1, ...data.map((x) => x.patients));
+  const gap = Math.max(...data.map((x) => x.patients)) - Math.min(...data.map((x) => x.patients));
+  const label = fromDateKey(day).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  return (
+    <Card className="p-4 md:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-bold">Pembagian pasien per fisioterapis, {label}</h2>
+        <p className="tnum text-[13px] text-muted">
+          Selisih terbanyak dan tersedikit: <span className="font-bold text-ink">{num(gap)} pasien</span>
+        </p>
+      </div>
+      <p className="mb-4 text-[13px] text-muted">
+        Pasien lama tetap dengan fisioterapisnya. Pasien baru disarankan ke fisioterapis berjenis kelamin sama dengan pasien paling sedikit bulan ini. Termasuk booking yang belum berlangsung.
+      </p>
+      <ul className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+        {data.map((x) => (
+          <li key={x.s.id}>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="inline-flex min-w-0 items-center gap-2 font-semibold">
+                <span className="size-2.5 shrink-0 rounded-full" style={{ background: staffColor(x.s.color).dot }} />
+                <span className="truncate">{x.s.name}</span>
+                {x.s.gender && <span className="text-[12px] font-medium text-muted">{x.s.gender === "L" ? "pria" : "wanita"}</span>}
+              </span>
+              <span className="tnum shrink-0">
+                <span className="font-bold">{num(x.patients)} pasien</span>
+                <span className="ml-2 text-[12px] text-muted">
+                  {num(x.fresh)} baru, {num(x.sessions)} sesi
+                </span>
+              </span>
+            </div>
+            <div className="mt-1.5 h-2">
+              <div className="h-full rounded-r-[4px]" style={{ width: `${Math.max(1.5, (x.patients / max) * 100)}%`, background: VIZ.returning }} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

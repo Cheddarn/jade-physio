@@ -28,6 +28,8 @@ import { CustomerPicker } from "./CustomerPicker";
 import { Choice } from "./PatientForm";
 import { useFlowAlerts } from "./FlowAlerts";
 import { ReportSheet } from "./ReportSheet";
+import { TherapistAdvice, useAutoPick } from "./TherapistAdvice";
+import { useAdvice } from "@/lib/assign";
 import { useCan, useUser } from "@/lib/auth";
 import { useCollection, useDoc, useServices, useStaff } from "@/lib/hooks";
 import { canRunSession } from "@/lib/roles";
@@ -412,6 +414,15 @@ export function AssignSheet({
     return m;
   }, [visits]);
   const want = visit?.therapistGender;
+  // The patient's own physio first; a new patient goes to the physio with the fewest patients this month.
+  const adv = useAdvice({
+    enabled: !!visit && !!customer,
+    customer,
+    day: visit?.dateKey ?? dateKey(),
+    want: want === undefined ? customer?.gender : want,
+    busy: load,
+  });
+  useAutoPick(adv.advice, staffId, setStaffId, !!visit && !!customer);
   const sorted = useMemo(
     () => [...staff].sort((a, b) => Number(want ? b.gender === want : 0) - Number(want ? a.gender === want : 0) || (load[a.id] ?? 0) - (load[b.id] ?? 0)),
     [staff, want, load],
@@ -477,6 +488,7 @@ export function AssignSheet({
           label="Terapis"
           hint={want ? `Pasien butuh terapis ${GENDER_SHORT[want].toLowerCase()}. Angka = pasien yang sedang ditangani.` : "Angka = pasien yang sedang ditangani."}
         >
+          <TherapistAdvice advice={adv.advice} loads={adv.loads} staff={staff} selected={staffId} onUse={setStaffId} />
           <div className="flex flex-wrap gap-2">
             {sorted.map((s) => {
               const c = staffColor(s.color);

@@ -67,6 +67,15 @@ Press **Ctrl K** (or **/**) anywhere, or tap *Cari* in the sidebar or on *Lainny
 5. **Mulai sesi** / **Sesi selesai** (therapist): the bed lights up in the therapist's colour in the 3D map while in session.
 6. After *Sesi selesai*, cleaning service gets *Kembalikan sepatu* and the front desk gets *Siap checkout*. The patient leaves the board once the shoes are returned.
 
+**Who gets the patient.** Every place a therapist is picked (*Booking baru*, *Atur terapis & bed*, and confirming an online request) shows a suggestion and selects it for you:
+
+- A returning patient stays with their own physio: the one who handled their first session, or the one set under *Fisioterapis tetap* on the patient's page.
+- A new patient goes to a physio of the patient's own gender (male to male, female to female; or the gender asked for at *Pasien datang* or in the online request), the one with the **fewest different patients in that calendar month**, so the month ends about even. Ties go to fewer sessions, then to whoever is less busy at that hour.
+- A physio with no shift on that date is skipped; if that is the patient's own physio, a cover of the same gender is suggested for that visit and the patient stays theirs.
+- The count is of different patients, not sessions, includes bookings still to come in the month, and leaves out cancelled ones. It is shown under the suggestion ("Pasien bulan ini: Andini 17, Bagus 19, …") and on the manager's Dasbor as *Pembagian pasien per fisioterapis*.
+
+It is a suggestion: the desk can tap another physio at any time and that choice is kept.
+
 **Families and relatives.** In *Pasien datang*, tap *Tambah kerabat yang ikut terapi* for each relative who also wants therapy (existing patient or new), with their relation to the first patient (suami/istri, anak, ayah/ibu, saudara, kakek/nenek, cucu, teman, kerabat lain).
 Each relative is registered as a patient with their own visit, therapist and bed, and both patients are linked in their records. The family is saved in one step, so cleaning gets one *Ganti sepatu* card and one button for everyone.
 On the board the family shares a coloured tag ("Istri Joko Susilo"), the bed picker marks family beds so they can sit side by side, and the 3D map joins their beds with a coloured line on the floor.
@@ -170,6 +179,7 @@ Edit `BUSINESS` in `src/lib/format.ts` (name, address, phone, opening hours used
 - `meta/commission`: `{ enabled, since, holdUntilReport, defaultRate, rates: { serviceId: { type, value } }, staffOff: [staffId], compensation: { enabled, amount, since, basis: 'attendance' | 'shift' } }`
 - `payDays/{staffId}_{YYYY-MM-DD}`: `{ staffId, dateKey, compensation, note, by, byName, at }`, the manager's own figure for a day
 - `customers.firstSessionAt`: start of the patient's first paid session, set at checkout (older records fall back to `createdAt`)
+- `customers.primaryStaffId`: the patient's own physio when the desk set one by hand; empty = the physio of their first session
 - `restock`: `{ item, qty, unit, category, urgent, dateKey, createdBy, done, doneBy, doneAt }`
 - `accounts/{email}`: patient portal account with `persons[]`
 - `requests`: patients' booking requests (`pending → confirmed / rejected / cancelled`), confirmed into `bookings`

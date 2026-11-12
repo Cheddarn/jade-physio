@@ -58,6 +58,8 @@ export interface Customer {
   followedUpBy?: string | null;
   /** Start of this patient's first paid session, set at checkout. New vs returning patients are told apart by it. */
   firstSessionAt?: number | null;
+  /** The physio this patient stays with, when the desk set one. Empty = the physio who handled them first. */
+  primaryStaffId?: string | null;
 }
 
 /** How the linked person relates to this customer: "id is my <kind>". */

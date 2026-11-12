@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Globe, UserCheck, UserPlus, X } from "lucide-react";
 import { Badge, Button, Confirm, Field, Input, Select, Sheet, Textarea, cx, errorText, useToast } from "./ui";
 import { useUser } from "@/lib/auth";
@@ -9,6 +9,8 @@ import { atTime, dateKey, hhmm, longDate, time } from "@/lib/format";
 import { confirmRequest, matchCustomer, rejectRequest } from "@/lib/portal";
 import { relationLabel } from "@/lib/relations";
 import { GENDER_SHORT } from "@/lib/flow";
+import { TherapistAdvice, useAutoPick } from "./TherapistAdvice";
+import { useAdvice } from "@/lib/assign";
 import type { Row } from "@/lib/store";
 import type { BookingRequest, RelationKind } from "@/lib/types";
 
@@ -65,12 +67,10 @@ function RequestItem({ r, focused }: { r: Row<BookingRequest>; focused: boolean 
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const match = matchCustomer(customers, r);
-  // "Siapa saja": suggest a physio of the patient's gender; the desk can change it.
-  useEffect(() => {
-    if (staffId || !staff.length) return;
-    const pick = staff.find((s) => r.gender && s.gender === r.gender) ?? staff[0];
-    setStaffId(pick.id);
-  }, [staff, staffId, r.gender]);
+  // "Siapa saja": the patient's own physio, or for a new patient the same-gender physio with the fewest patients that month.
+  // A physio the patient asked for by name is kept.
+  const adv = useAdvice({ enabled: r.status === "pending", customer: match, day, want: r.gender ?? match?.gender });
+  useAutoPick(adv.advice, staffId, setStaffId, r.status === "pending" && !r.staffId);
   const service = services.find((s) => s.id === r.serviceId);
 
   async function accept() {
@@ -127,6 +127,9 @@ function RequestItem({ r, focused }: { r: Row<BookingRequest>; focused: boolean 
           </div>
         )}
       </div>
+      {open && !r.staffId && (
+        <TherapistAdvice className="mt-3" advice={adv.advice} loads={adv.loads} staff={staff} selected={staffId} onUse={setStaffId} />
+      )}
       {open && (
         <div className="mt-3 grid gap-3 rounded-xl bg-canvas p-3 sm:grid-cols-[1fr_auto_auto]">
           <Field label="Fisioterapis" htmlFor={`rq-st-${r.id}`}>

@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/BookingDetail";
 import { CustomerForm } from "@/components/CustomerForm";
 import { PatientForm } from "@/components/PatientForm";
 import { RelationGraph } from "@/components/RelationGraph";
+import { OwnTherapist } from "@/components/TherapistAdvice";
 import { DOCUMENTS, GENDER_LABEL, SOURCES, ageFrom, labelsOf, medicalFlags } from "@/lib/flow";
 import { waLink } from "@/components/CustomerPicker";
 import { IssueVoucherSheet, SellPackageSheet, VoucherDetail } from "@/components/VoucherSheets";
@@ -113,6 +114,8 @@ export default function CustomerDetailPage() {
       </div>
 
       {(c.profile || c.gender || Object.values(patientInfo(c)).some(Boolean)) && <ProfileCard c={c} />}
+
+      <OwnTherapist className="mt-5" customer={c} history={bookings ?? []} canEdit={can("customers.edit")} />
 
       {c.notes && <p className="mt-5 rounded-xl border border-line bg-surface px-4 py-3 text-sm whitespace-pre-line text-ink-2">{c.notes}</p>}
 
