@@ -4,11 +4,11 @@ import { useMemo, useRef, useState } from "react";
 import { Copy, FileText, History, Paperclip, Trash2 } from "lucide-react";
 import { Button, Field, Input, Sheet, Textarea, cx, errorText, useToast } from "./ui";
 import { useUser } from "@/lib/auth";
-import { useCollection } from "@/lib/hooks";
+import { useCollection, useDoc } from "@/lib/hooks";
 import { MAX_REPORT_MB, REPORT_TYPES, daysLate, lateText, removeReportFile, saveReport, uploadReportFile } from "@/lib/reports";
 import { dateKey, longDate, shortDate, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
-import type { Booking, ReportFile, TherapyReport } from "@/lib/types";
+import type { Booking, ReportFile, ReportOptions, TherapyReport } from "@/lib/types";
 
 type Fields = Pick<TherapyReport, "customerName" | "complaint" | "assessment" | "treatment" | "advice" | "nextVisit">;
 
@@ -80,6 +80,10 @@ export function ReportSheet({
         .sort((a, b) => b.sessionAt - a.sessionAt)[0] ?? null,
     [history, booking],
   );
+
+  // The physio's own quick-pick phrases, added in the report app.
+  const { row: own } = useDoc<ReportOptions>("reportOptions", booking?.staffId);
+  const extra = (base: string[], more?: string[]) => [...base, ...(more ?? []).filter((x) => !base.some((b) => b.toLowerCase() === x.toLowerCase()))];
 
   const set = (k: keyof Fields, value: string) => setF((x) => ({ ...x, [k]: value }));
   const text = (k: keyof Fields) => ({
@@ -211,11 +215,11 @@ export function ReportSheet({
             <Textarea id="rp-a" className="min-h-16" placeholder="mis. ROM bahu kanan terbatas 120°, nyeri tekan m. trapezius" {...text("assessment")} />
           </Field>
           <Field label="Tindakan yang diberikan" htmlFor="rp-t">
-            <Chips items={TREATMENTS} value={f.treatment} onPick={(x) => set("treatment", toggleItem(f.treatment, x))} label="Tindakan" />
+            <Chips items={extra(TREATMENTS, own?.treatments)} value={f.treatment} onPick={(x) => set("treatment", toggleItem(f.treatment, x))} label="Tindakan" />
             <Textarea id="rp-t" className="min-h-16" placeholder="Ketuk pilihan di atas, atau tulis sendiri: dosis, durasi, area" {...text("treatment")} />
           </Field>
           <Field label="Saran & latihan di rumah" htmlFor="rp-s">
-            <Chips items={ADVICE} value={f.advice} onPick={(x) => set("advice", toggleItem(f.advice, x))} label="Saran" />
+            <Chips items={extra(ADVICE, own?.advice)} value={f.advice} onPick={(x) => set("advice", toggleItem(f.advice, x))} label="Saran" />
             <Textarea id="rp-s" className="min-h-16" {...text("advice")} />
           </Field>
           <Field label="Rencana kunjungan berikutnya" htmlFor="rp-n">

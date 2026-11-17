@@ -168,6 +168,12 @@ service cloud.firestore {
       allow delete: if isManager();
     }
 
+    // A physio's own quick-pick phrases in the report form (report app). Doc id = staff id.
+    match /reportOptions/{staffId} {
+      allow read: if clinical();
+      allow write: if isDesk() || (isTherapist() && staffId == myStaffId());
+    }
+
     // ---------- patient portal ----------
     match /accounts/{email} {
       allow read: if (signedIn() && myId() == email) || isDesk();

@@ -60,6 +60,12 @@ export interface Customer {
   firstSessionAt?: number | null;
   /** The physio this patient stays with, when the desk set one. Empty = the physio who handled them first. */
   primaryStaffId?: string | null;
+  /** Main complaint typed by the front desk in the report app's patient list. The registration form's is profile.complaint. */
+  complaint?: string;
+  /** The report app's front desk asked this patient's physio for a report; owed until one is written after this time. */
+  reportRequestedAt?: number | null;
+  reportRequestedBy?: string | null;
+  reportRequestedByName?: string | null;
 }
 
 /** How the linked person relates to this customer: "id is my <kind>". */
@@ -603,6 +609,13 @@ export interface Expense {
   createdBy: string;
   createdByName: string;
   createdAt: number;
+}
+
+/** A physio's own quick-pick phrases for the report form, added in the report app. Doc id = staff id. */
+export interface ReportOptions {
+  treatments: string[];
+  advice: string[];
+  updatedAt: number;
 }
 
 export interface Access {

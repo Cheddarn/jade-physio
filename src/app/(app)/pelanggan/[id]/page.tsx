@@ -273,7 +273,7 @@ function ProfileCard({ c }: { c: Customer }) {
     ["Alamat", info.address],
     ["Asuransi", p?.insurance === "ya" ? p.insuranceName || "Ya" : p?.insurance === "tidak" ? "Tidak" : undefined],
     ["Kontak darurat", [p?.emergencyName, p?.emergencyRelation, p?.emergencyPhone].filter(Boolean).join(", ")],
-    ["Keluhan utama", [p?.complaint, p?.complaintSince ? `sejak ${p.complaintSince}` : ""].filter(Boolean).join(", ")],
+    ["Keluhan utama", [p?.complaint || c.complaint, p?.complaint && p?.complaintSince ? `sejak ${p.complaintSince}` : ""].filter(Boolean).join(", ")],
     ["Cedera", p?.injury === "ya" ? p.injuryDetail || "Ya" : undefined],
     ["Obat rutin", p?.routineMeds === "ya" ? p.routineMedsDetail || "Ya" : undefined],
     ["Dokumen", p ? labelsOf(DOCUMENTS, p.documents, p.documentsOther).join(", ") : undefined],
