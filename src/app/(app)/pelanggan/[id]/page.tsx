@@ -18,7 +18,8 @@ import { IssueVoucherSheet, SellPackageSheet, VoucherDetail } from "@/components
 import { useCollection, useDoc } from "@/lib/hooks";
 import { patientInfo, updateCustomer, voucherState } from "@/lib/actions";
 import { useCan } from "@/lib/auth";
-import { PAYMENT_LABEL, dateTime, dayMonth, remaining, rupiah, rupiahShort, shortDate } from "@/lib/format";
+import { PAYMENT_LABEL, dateTime, dayMonth, longDate, remaining, rupiah, rupiahShort, shortDate, time } from "@/lib/format";
+import { isManualReport } from "@/lib/reports";
 import type { Booking, Customer, Sale, TherapyReport, Visit, Voucher } from "@/lib/types";
 import { PurchaseHistory, SessionHistory } from "@/components/CustomerHistory";
 
@@ -211,7 +212,10 @@ export default function CustomerDetailPage() {
           ))}
 
         {tab === "sesi" && (
-          <SessionHistory bookings={visits} vouchers={vouchers ?? []} sales={sales} reports={reports ?? []} visits={walkIns ?? []} />
+          <>
+            <SessionHistory bookings={visits} vouchers={vouchers ?? []} sales={sales} reports={reports ?? []} visits={walkIns ?? []} />
+            <ManualReports reports={(reports ?? []).filter(isManualReport)} />
+          </>
         )}
 
         {tab === "pembelian" && can("sales.view") && <PurchaseHistory sales={invoices} vouchers={vouchers ?? []} customerName={c.name} />}
@@ -298,5 +302,32 @@ function ProfileCard({ c }: { c: Customer }) {
           ))}
       </dl>
     </div>
+  );
+}
+
+/** Reports written in the report app without a booking (e.g. a home visit) for this patient. */
+function ManualReports({ reports }: { reports: (TherapyReport & { id: string })[] }) {
+  if (!reports.length) return null;
+  const list = [...reports].sort((a, b) => b.sessionAt - a.sessionAt);
+  return (
+    <section className="mt-6" aria-label="Laporan tanpa booking">
+      <h3 className="font-bold">
+        Laporan tanpa booking <span className="tnum text-muted">({list.length})</span>
+      </h3>
+      <p className="mt-0.5 text-[13px] text-muted">Dibuat di aplikasi laporan terapi untuk sesi yang tidak ada di kalender.</p>
+      <Card className="mt-3 divide-y divide-line-soft">
+        {list.map((r) => (
+          <Link key={r.id} href={`/laporan-terapi/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas">
+            <ClipboardList className="size-4 shrink-0 text-jade" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-semibold">
+                {longDate(r.sessionAt)}, {time(r.sessionAt)}
+              </span>
+              <span className="block truncate text-[13px] text-muted">{[r.serviceName, r.staffName, r.treatment].filter(Boolean).join(", ")}</span>
+            </span>
+          </Link>
+        ))}
+      </Card>
+    </section>
   );
 }

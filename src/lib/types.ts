@@ -473,9 +473,14 @@ export interface ReportFile {
   path?: string;
 }
 
-/** The physio's report after a session. Doc id = booking id. */
+/**
+ * The physio's report after a session. Doc id = booking id.
+ * The report app (jade-report) can also write one without a booking ("Laporan baru"): own id, bookingId "" and manual: true,
+ * the patient's name typed in, linked to a patient (customerId) only when one was picked.
+ */
 export interface TherapyReport {
   bookingId: string;
+  manual?: boolean;
   visitId?: string | null;
   customerId: string;
   customerName: string;

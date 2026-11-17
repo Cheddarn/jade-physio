@@ -14,7 +14,7 @@ import { useCan, useUser } from "@/lib/auth";
 import { useCollection } from "@/lib/hooks";
 import { STATUS_LABEL, addDays, dateKey, fromDateKey, shortDate, staffColor, time } from "@/lib/format";
 import { useStaff } from "@/lib/hooks";
-import { dayListText, flagMissingReports, markReportSent, reportMessage, reportOwed, reportWritable, toBlobUrl } from "@/lib/reports";
+import { dayListText, flagMissingReports, isManualReport, markReportSent, reportMessage, reportOwed, reportWritable, toBlobUrl } from "@/lib/reports";
 import { useSettings } from "@/lib/settings";
 import type { Row } from "@/lib/store";
 import type { Booking, TherapyReport, Visit } from "@/lib/types";
@@ -65,7 +65,15 @@ function Reports() {
     if (wanted) setEditing(wanted);
   }, [wanted]);
 
-  const reports = useMemo(() => new Map((reportRows ?? []).map((r) => [r.bookingId, r])), [reportRows]);
+  const reports = useMemo(() => new Map((reportRows ?? []).filter((r) => !isManualReport(r)).map((r) => [r.bookingId, r])), [reportRows]);
+  // Written in the report app without a booking (e.g. a home visit): listed apart, since there is no session to put them on.
+  const manual = useMemo(
+    () =>
+      (reportRows ?? [])
+        .filter((r) => isManualReport(r) && (!therapist || !user.staffId || r.staffId === user.staffId))
+        .sort((a, b) => a.sessionAt - b.sessionAt),
+    [reportRows, therapist, user.staffId],
+  );
   const visitOf = useMemo(() => new Map((visitRows ?? []).filter((v) => v.bookingId).map((v) => [v.bookingId!, v])), [visitRows]);
   const all = useMemo(
     () =>
@@ -269,6 +277,65 @@ function Reports() {
           </Card>
         )}
         {list.length > 0 && <Pager pager={pager} label="sesi" className="mt-3" />}
+
+        {manual.length > 0 && (
+          <section className="mt-6" aria-label="Laporan tanpa booking">
+            <h2 className="font-bold">
+              Laporan tanpa booking <span className="tnum text-muted">({manual.length})</span>
+            </h2>
+            <p className="mt-0.5 text-[13px] text-muted">Dibuat di aplikasi laporan terapi untuk sesi yang tidak ada di kalender. Ubah isinya di aplikasi itu.</p>
+            <Card className="mt-3 divide-y divide-line-soft">
+              {manual.map((r) => {
+                const c = staffColor(staff.find((s) => s.id === r.staffId)?.color);
+                return (
+                  <div key={r.id} className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="tnum w-12 shrink-0 text-sm font-bold">{time(r.sessionAt)}</div>
+                      <span className="h-10 w-1 shrink-0 rounded-full" style={{ background: c.dot }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold">
+                          {r.customerId ? (
+                            <Link href={`/pelanggan/${r.customerId}`} className="hover:underline">
+                              {r.customerName}
+                            </Link>
+                          ) : (
+                            r.customerName
+                          )}
+                        </p>
+                        <p className="truncate text-[13px] text-muted">{[r.serviceName, r.staffName].filter(Boolean).join(", ")}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px]">
+                          <span className="font-semibold text-jade-deep">
+                            <Check className="mr-0.5 inline size-3" />
+                            Laporan {time(r.updatedAt)}
+                          </span>
+                          {!r.customerId && <span className="text-muted">belum terhubung ke data pasien</span>}
+                          {r.sentAt && <span className="text-muted">dikirim {time(r.sentAt)}</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pl-[4.75rem] md:pl-0">
+                      <Link href={`/laporan-terapi/${r.id}`}>
+                        <Button size="sm" variant="secondary" icon={<Printer className="size-3.5" />}>
+                          {r.file ? "Lihat" : "PDF"}
+                        </Button>
+                      </Link>
+                      {desk && (
+                        <Button
+                          size="sm"
+                          variant={r.sentAt ? "ghost" : "primary"}
+                          icon={r.sentAt ? <Send className="size-3.5" /> : <MessageCircle className="size-3.5" />}
+                          onClick={() => send(r)}
+                        >
+                          {r.sentAt ? "Kirim lagi" : "Kirim WA"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          </section>
+        )}
         {desk && (
           <p className="mt-3 text-[13px] text-muted">
             Kirim WA membuka WhatsApp dengan ringkasan dan tautan PDF laporan. Laporan tanpa file: buka PDF, simpan, lalu lampirkan di WhatsApp.

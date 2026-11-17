@@ -173,7 +173,8 @@ Edit `BUSINESS` in `src/lib/format.ts` (name, address, phone, opening hours used
 - `meta/settings`: `{ hours: { "0".."6": { start, end } | null }, reminderDays }`
 - `team/{email}`: `{ name, role, staffId?, active, schedule: { "0".."6": { start, end } | null } }`
 - `attendance/{email}_{YYYY-MM-DD}`: clock in/out, shift frozen at clock-in, `overtimeMin`, `closing: normal | overtime`
-- `reports/{bookingId}`: therapy report; file in Storage under `reports/{bookingId}/`
+- `reports/{bookingId}`: therapy report; file in Storage under `reports/{bookingId}/`. `customerName` is the name on the report: filled in from the booking in the report form, and the physio can correct it
+- `reports.manual`: a report written in the report app ([jade-report](https://github.com/Cheddarn/jade-report)) without a booking, with its own id and `bookingId: ""`; the patient's name is typed in and linked to `customerId` only when the physio picked a patient on file. Listed under *Laporan tanpa booking* on Laporan terapi and on the patient's page
 - `bookings.endedAt`, `bookings.reportDue`, `bookings.reportAt`: when the session ended, whether it still owes a report (one small query finds every unwritten report on any day), and when the report was first saved
 - `bookings.commission`: `{ type: 'percent' | 'flat' | 'none', value, amount }`, frozen at checkout; `bookings.walkIn`: made by checkout for a service sold without a booking
 - `meta/commission`: `{ enabled, since, holdUntilReport, defaultRate, rates: { serviceId: { type, value } }, staffOff: [staffId], compensation: { enabled, amount, since, basis: 'attendance' | 'shift' } }`

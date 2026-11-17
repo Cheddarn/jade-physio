@@ -41,7 +41,7 @@ export async function removeReportFile(f?: ReportFile | null) {
 
 export async function saveReport(
   booking: Row<Booking>,
-  fields: Pick<TherapyReport, "complaint" | "assessment" | "treatment" | "advice" | "nextVisit">,
+  fields: Pick<TherapyReport, "complaint" | "assessment" | "treatment" | "advice" | "nextVisit"> & { customerName?: string },
   file: ReportFile | null,
   by: string,
   existing?: TherapyReport | null,
@@ -52,7 +52,6 @@ export async function saveReport(
     bookingId: booking.id,
     visitId: visitId ?? existing?.visitId ?? null,
     customerId: booking.customerId,
-    customerName: booking.customerName,
     customerPhone: booking.customerPhone ?? "",
     staffId: booking.staffId,
     staffName: booking.staffName,
@@ -60,6 +59,8 @@ export async function saveReport(
     dateKey: booking.dateKey,
     sessionAt: booking.startAt,
     ...fields,
+    // The name on the report: filled in from the booking, and the physio can correct the spelling.
+    customerName: fields.customerName?.trim() || booking.customerName,
     file,
     createdAt: existing?.createdAt ?? now,
     createdBy: existing?.createdBy ?? by,
@@ -84,6 +85,9 @@ export async function markSessionEnded(bookingId: string, at = Date.now()) {
     /* older security rules: today's list still shows the session as owing a report */
   }
 }
+
+/** Written in the report app without a booking. */
+export const isManualReport = (r: Pick<TherapyReport, "manual" | "bookingId">) => !!r.manual || !r.bookingId;
 
 export const markReportSent = (id: string, by: string) => store.update("reports", id, { sentAt: Date.now(), sentBy: by });
 

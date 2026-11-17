@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Copy, FileText, History, Paperclip, Trash2 } from "lucide-react";
-import { Button, Field, Sheet, Textarea, cx, errorText, useToast } from "./ui";
+import { Button, Field, Input, Sheet, Textarea, cx, errorText, useToast } from "./ui";
 import { useUser } from "@/lib/auth";
 import { useCollection } from "@/lib/hooks";
 import { MAX_REPORT_MB, REPORT_TYPES, daysLate, lateText, removeReportFile, saveReport, uploadReportFile } from "@/lib/reports";
@@ -10,7 +10,7 @@ import { dateKey, longDate, shortDate, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Booking, ReportFile, TherapyReport } from "@/lib/types";
 
-type Fields = Pick<TherapyReport, "complaint" | "assessment" | "treatment" | "advice" | "nextVisit">;
+type Fields = Pick<TherapyReport, "customerName" | "complaint" | "assessment" | "treatment" | "advice" | "nextVisit">;
 
 export const fileSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -45,7 +45,7 @@ export function ReportSheet({
   const user = useUser();
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
-  const [f, setF] = useState<Fields>({});
+  const [f, setF] = useState<Fields>({ customerName: "" });
   const [file, setFile] = useState<ReportFile | null>(null);
   const [pending, setPending] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +57,7 @@ export function ReportSheet({
     setOpenedFor(key);
     if (booking) {
       setF({
+        customerName: report?.customerName ?? booking.customerName,
         complaint: report?.complaint ?? complaint ?? booking.notes ?? "",
         assessment: report?.assessment ?? "",
         treatment: report?.treatment ?? "",
@@ -98,6 +99,7 @@ export function ReportSheet({
   function copyLast() {
     if (!last) return;
     setF((x) => ({
+      ...x,
       complaint: x.complaint?.trim() ? x.complaint : (last.complaint ?? ""),
       assessment: last.assessment ?? "",
       treatment: last.treatment ?? "",
@@ -110,6 +112,7 @@ export function ReportSheet({
   async function submit() {
     if (!booking) return;
     setError("");
+    if (!f.customerName?.trim()) return setError("Isi nama pasien.");
     if (!pending && !file && !f.treatment?.trim() && !f.assessment?.trim())
       return setError("Isi minimal tindakan atau pemeriksaan, atau lampirkan file laporan.");
     setBusy(true);
@@ -120,7 +123,7 @@ export function ReportSheet({
         if (report?.file && report.file.path !== next.path) await removeReportFile(report.file);
       } else if (!file && report?.file) await removeReportFile(report.file);
       await saveReport(booking, f, next, user.email, report, visitId);
-      toast(`Laporan ${booking.customerName} tersimpan`);
+      toast(`Laporan ${f.customerName?.trim() || booking.customerName} tersimpan`);
       onClose();
     } catch (e) {
       setError(errorText(e));
@@ -150,14 +153,20 @@ export function ReportSheet({
       {booking && (
         <div className="flex flex-col gap-5">
           <div className="rounded-xl bg-canvas px-4 py-3 text-sm">
-            <p className="font-bold">{booking.customerName}</p>
+            <p className="font-semibold">
+              Sesi {longDate(booking.startAt)}, {time(booking.startAt)}
+            </p>
             <p className="text-muted">
-              {longDate(booking.startAt)}, {time(booking.startAt)}, {booking.serviceName}, {booking.staffName}
+              {booking.serviceName}, {booking.staffName}
             </p>
             {!report && late > 0 && (
               <p className="mt-1 font-semibold text-amber">Sesi {lateText(booking).toLowerCase()}. Laporan seharusnya dibuat di hari yang sama.</p>
             )}
           </div>
+
+          <Field label="Nama pasien" htmlFor="rp-name" hint="Terisi dari booking. Ubah bila ejaannya perlu diperbaiki.">
+            <Input id="rp-name" autoComplete="off" value={f.customerName ?? ""} onChange={(e) => set("customerName", e.target.value)} />
+          </Field>
 
           {last && !report && (
             <div className="rounded-xl border border-line">
