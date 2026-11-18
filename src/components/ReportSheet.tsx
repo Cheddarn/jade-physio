@@ -9,8 +9,11 @@ import { MAX_REPORT_MB, REPORT_TYPES, daysLate, lateText, removeReportFile, save
 import { dateKey, longDate, shortDate, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Booking, ReportFile, ReportOptions, TherapyReport } from "@/lib/types";
+import { matchCondition } from "@/lib/conditions";
+import { progressText } from "@/lib/progress";
+import { HistoryFields, ProgressFields, type Clinical } from "./ClinicalFields";
 
-type Fields = Pick<TherapyReport, "customerName" | "complaint" | "assessment" | "treatment" | "advice" | "nextVisit">;
+type Fields = Pick<TherapyReport, "customerName" | "assessment" | "treatment" | "advice" | "nextVisit"> & Clinical;
 
 export const fileSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -56,9 +59,18 @@ export function ReportSheet({
   if (key !== openedFor) {
     setOpenedFor(key);
     if (booking) {
+      const said = report?.complaint ?? complaint ?? booking.notes ?? "";
+      // A new report: the complaint may already name a case in the library, with its mechanism of injury.
+      const known = report ? null : matchCondition(said);
       setF({
         customerName: report?.customerName ?? booking.customerName,
-        complaint: report?.complaint ?? complaint ?? booking.notes ?? "",
+        complaint: said,
+        condition: report ? (report.condition ?? null) : (known?.name ?? null),
+        anamnesis: report?.anamnesis ?? "",
+        mechanism: report ? (report.mechanism ?? "") : (known?.mechanism ?? ""),
+        pain: report?.pain ?? null,
+        recovery: report?.recovery ?? null,
+        progressNote: report?.progressNote ?? "",
         assessment: report?.assessment ?? "",
         treatment: report?.treatment ?? "",
         advice: report?.advice ?? "",
@@ -85,8 +97,9 @@ export function ReportSheet({
   const { row: own } = useDoc<ReportOptions>("reportOptions", booking?.staffId);
   const extra = (base: string[], more?: string[]) => [...base, ...(more ?? []).filter((x) => !base.some((b) => b.toLowerCase() === x.toLowerCase()))];
 
-  const set = (k: keyof Fields, value: string) => setF((x) => ({ ...x, [k]: value }));
-  const text = (k: keyof Fields) => ({
+  const set = (k: "assessment" | "treatment" | "advice" | "nextVisit" | "customerName", value: string) => setF((x) => ({ ...x, [k]: value }));
+  const setClinical = (patch: Partial<Clinical>) => setF((x) => ({ ...x, ...patch }));
+  const text = (k: "assessment" | "treatment" | "advice" | "nextVisit") => ({
     value: f[k] ?? "",
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => set(k, e.target.value),
   });
@@ -105,6 +118,10 @@ export function ReportSheet({
     setF((x) => ({
       ...x,
       complaint: x.complaint?.trim() ? x.complaint : (last.complaint ?? ""),
+      // The history is usually the same story; progress is measured again each session.
+      condition: x.condition ?? last.condition ?? null,
+      anamnesis: x.anamnesis?.trim() ? x.anamnesis : (last.anamnesis ?? ""),
+      mechanism: last.mechanism?.trim() ? last.mechanism : x.mechanism,
       assessment: last.assessment ?? "",
       treatment: last.treatment ?? "",
       advice: last.advice ?? "",
@@ -190,9 +207,11 @@ export function ReportSheet({
                 <dl className="grid gap-2 border-t border-line-soft px-3.5 py-3 text-[13px]">
                   {(
                     [
+                      ["Kondisi", last.condition ?? ""],
                       ["Pemeriksaan", last.assessment],
                       ["Tindakan", last.treatment],
                       ["Saran", last.advice],
+                      ["Progres", progressText(last)],
                       ["Rencana", last.nextVisit],
                     ] as const
                   )
@@ -208,9 +227,7 @@ export function ReportSheet({
             </div>
           )}
 
-          <Field label="Keluhan" htmlFor="rp-c">
-            <Textarea id="rp-c" className="min-h-14" {...text("complaint")} />
-          </Field>
+          <HistoryFields key={openedFor ?? ""} value={f} onChange={setClinical} />
           <Field label="Pemeriksaan / temuan" htmlFor="rp-a">
             <Textarea id="rp-a" className="min-h-16" placeholder="mis. ROM bahu kanan terbatas 120°, nyeri tekan m. trapezius" {...text("assessment")} />
           </Field>
@@ -222,6 +239,7 @@ export function ReportSheet({
             <Chips items={extra(ADVICE, own?.advice)} value={f.advice} onPick={(x) => set("advice", toggleItem(f.advice, x))} label="Saran" />
             <Textarea id="rp-s" className="min-h-16" {...text("advice")} />
           </Field>
+          <ProgressFields value={f} onChange={setClinical} last={last} />
           <Field label="Rencana kunjungan berikutnya" htmlFor="rp-n">
             <Chips items={NEXT} value={f.nextVisit} onPick={(x) => set("nextVisit", hasItem(f.nextVisit, x) ? "" : x)} label="Kunjungan berikutnya" />
             <Textarea id="rp-n" className="min-h-12" placeholder="mis. 3 hari lagi, evaluasi ROM" {...text("nextVisit")} />

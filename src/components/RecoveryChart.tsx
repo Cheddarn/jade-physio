@@ -1,0 +1,195 @@
+"use client";
+
+import { useState } from "react";
+import { cx } from "./ui";
+import { TrendBadge } from "./ClinicalFields";
+import { dayMonth, shortDate } from "@/lib/format";
+import { hasProgress, trend } from "@/lib/progress";
+import type { TherapyReport } from "@/lib/types";
+
+/*
+  Recovery over the sessions: two small charts, pain (VAS 0-10) and recovery (0-100 %). Two charts, not one with two
+  axes, because the scales differ. One line each (2px, end dots with a surface ring), quiet gridlines, the latest value
+  labelled, a hover crosshair with the values on screen, and the same numbers in a table for print and screen readers.
+  Same file in both apps.
+*/
+
+const INK = "#1f9a73"; // series colour, checked against the white surface (contrast >= 3:1)
+const GRID = "#e6e8eb";
+const MUTED = "#6b7280";
+
+type Point = Pick<TherapyReport, "pain" | "recovery" | "sessionAt" | "staffName"> & { id?: string };
+
+function Chart({
+  title,
+  points,
+  pick,
+  max,
+  unit,
+  current,
+}: {
+  title: string;
+  points: Point[];
+  pick: (p: Point) => number | null | undefined;
+  max: number;
+  unit: (v: number) => string;
+  /** The session of the report being viewed, marked in the chart. */
+  current?: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 320,
+    H = 132,
+    L = 40,
+    R = 44,
+    T = 10,
+    B = 24;
+  const n = points.length;
+  const x = (i: number) => (n === 1 ? L + (W - L - R) / 2 : L + (i * (W - L - R)) / (n - 1));
+  const y = (v: number) => T + (1 - v / max) * (H - T - B);
+  const vals = points.map(pick);
+  const drawn = vals.map((v, i) => (v == null ? null : { i, v }));
+  const line = drawn.filter(Boolean) as { i: number; v: number }[];
+  if (!line.length) return null;
+  const path = line.map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const lastPt = line[line.length - 1];
+  const ticks = [0, max / 2, max];
+  const xLabels = n <= 6 ? points.map((_, i) => i) : [0, n - 1];
+
+  function move(e: React.PointerEvent<SVGRectElement>) {
+    const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+    const px = ((e.clientX - box.left) / box.width) * W;
+    let best = 0;
+    for (let i = 1; i < n; i++) if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i;
+    setHover(best);
+  }
+
+  const h = hover != null ? points[hover] : null;
+  const hv = hover != null ? vals[hover] : null;
+
+  return (
+    <figure className="relative min-w-0">
+      <figcaption className="text-[13px] font-semibold text-ink-2">{title}</figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 block h-auto w-full" role="img" aria-label={`${title}: ${line.map((p) => unit(p.v)).join(", ")}`}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R + 8} y1={y(t)} y2={y(t)} stroke={GRID} strokeWidth={1} />
+            <text x={L - 6} y={y(t) + 3.5} textAnchor="end" fontSize={10} fill={MUTED}>
+              {unit(t)}
+            </text>
+          </g>
+        ))}
+        {xLabels.map((i) => (
+          <text key={i} x={x(i)} y={H - 6} textAnchor={n === 1 ? "middle" : i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize={10} fill={MUTED}>
+            {dayMonth(points[i].sessionAt)}
+          </text>
+        ))}
+        {hover != null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={H - B} stroke={MUTED} strokeWidth={1} />}
+        <path d={path} fill="none" stroke={INK} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {line.map((p) => {
+          const isCurrent = current != null && points[p.i].sessionAt === current;
+          return <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={isCurrent || hover === p.i ? 5.5 : 4} fill={INK} stroke="#fff" strokeWidth={2} />;
+        })}
+        {/* The latest value, in ink, beside its point. */}
+        <text x={x(lastPt.i) + 9} y={y(lastPt.v) + 4} fontSize={12} fontWeight={700} fill="#1b2430">
+          {unit(lastPt.v)}
+        </text>
+        <rect x={0} y={0} width={W} height={H} fill="transparent" className="no-print" onPointerMove={move} onPointerLeave={() => setHover(null)} />
+      </svg>
+      {h && (
+        <div
+          className="no-print pointer-events-none absolute top-6 z-10 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] shadow-md"
+          style={{ left: `${Math.min(70, Math.max(0, (x(hover!) / W) * 100 - 15))}%` }}
+        >
+          <p className="font-semibold">
+            Sesi {hover! + 1}, {shortDate(h.sessionAt)}
+          </p>
+          <p className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-3 rounded" style={{ background: INK }} />
+            {hv != null ? unit(hv) : "tidak diisi"}
+          </p>
+          <p className="text-muted">{h.staffName}</p>
+        </div>
+      )}
+    </figure>
+  );
+}
+
+/**
+ * The patient's recovery up to a session: the two charts, how this session compares with the one before, and
+ * (with `table`) every session's numbers.
+ */
+export function RecoveryProgress({
+  reports,
+  upTo,
+  current,
+  table = true,
+  className,
+}: {
+  reports: (Point & Pick<TherapyReport, "progressNote">)[];
+  /** Only sessions up to this time (a printed report shows its history, not later sessions). */
+  upTo?: number;
+  current?: number;
+  table?: boolean;
+  className?: string;
+}) {
+  const points = reports
+    .filter((r) => hasProgress(r) && (upTo == null || r.sessionAt <= upTo))
+    .sort((a, b) => a.sessionAt - b.sessionAt)
+    .slice(-12);
+  if (!points.length) return null;
+  const now = points[points.length - 1];
+  const t = trend(now, points[points.length - 2]);
+  const first = points[0];
+  const span = points.length > 1 ? trend(now, first) : null;
+  return (
+    <div className={cx("flex flex-col gap-4", className)}>
+      {(t || span) && (
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          {t && (
+            <>
+              <span className="text-muted">Dibanding sesi lalu:</span>
+              <TrendBadge t={t} />
+            </>
+          )}
+          {span && points.length > 2 && (
+            <>
+              <span className="text-muted">Sejak sesi pertama ({dayMonth(first.sessionAt)}):</span>
+              <TrendBadge t={span} />
+            </>
+          )}
+        </div>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
+        <Chart title="Nyeri (VAS 0–10, makin rendah makin baik)" points={points} pick={(p) => p.pain} max={10} unit={(v) => `${v}`} current={current} />
+        <Chart title="Pemulihan (makin tinggi makin baik)" points={points} pick={(p) => p.recovery} max={100} unit={(v) => `${v}%`} current={current} />
+      </div>
+      {table && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-left text-[13px]">
+            <caption className="sr-only">Progres pemulihan per sesi</caption>
+            <thead>
+              <tr className="border-b border-line text-muted">
+                <th className="py-1.5 pr-3 font-semibold">Sesi</th>
+                <th className="py-1.5 pr-3 font-semibold">Tanggal</th>
+                <th className="py-1.5 pr-3 text-right font-semibold">Nyeri</th>
+                <th className="py-1.5 pr-3 text-right font-semibold">Pemulihan</th>
+                <th className="py-1.5 font-semibold">Catatan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {points.map((p, i) => (
+                <tr key={p.id ?? p.sessionAt} className={cx("border-b border-line-soft align-top", current === p.sessionAt && "font-semibold")}>
+                  <td className="tnum py-1.5 pr-3">{i + 1}</td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{shortDate(p.sessionAt)}</td>
+                  <td className="tnum py-1.5 pr-3 text-right">{p.pain != null ? `${p.pain}/10` : "-"}</td>
+                  <td className="tnum py-1.5 pr-3 text-right">{p.recovery != null ? `${p.recovery}%` : "-"}</td>
+                  <td className="py-1.5 font-normal text-muted">{p.progressNote || p.staffName}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

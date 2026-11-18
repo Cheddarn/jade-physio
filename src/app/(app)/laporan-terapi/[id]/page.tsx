@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { Button, Empty, Spinner } from "@/components/ui";
-import { useDoc } from "@/lib/hooks";
+import { useCollection, useDoc } from "@/lib/hooks";
+import { RecoveryProgress } from "@/components/RecoveryChart";
+import { hasProgress, progressText } from "@/lib/progress";
 import { BUSINESS, longDate, time } from "@/lib/format";
 import type { Customer, TherapyReport } from "@/lib/types";
 import { ageFrom } from "@/lib/flow";
@@ -17,6 +19,11 @@ export default function ReportPrintPage() {
   const router = useRouter();
   const { row: r, loading } = useDoc<TherapyReport>("reports", id);
   const { row: c } = useDoc<Customer>("customers", r?.customerId);
+  // The patient's other sessions, for the recovery progression (a typed name: its reports without a patient on file).
+  const { rows: history } = useCollection<TherapyReport>(
+    r ? "reports" : null,
+    r?.customerId ? [["customerId", "==", r.customerId]] : [["customerName", "==", r?.customerName ?? ""]],
+  );
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!r?.file?.url) return setFileUrl(null);
@@ -41,11 +48,13 @@ export default function ReportPrintPage() {
   const age = ageFrom(c?.profile?.birthDate);
   const sections: [string, string | undefined][] = [
     ["Keluhan", r.complaint],
+    ["Anamnesis", r.anamnesis],
+    ["Mekanisme cedera", r.mechanism],
     ["Pemeriksaan / temuan", r.assessment],
     ["Tindakan yang diberikan", r.treatment],
     ["Saran & latihan di rumah", r.advice],
-    ["Rencana kunjungan berikutnya", r.nextVisit],
   ];
+  const sessions = (history ?? []).filter((x) => (r.customerId ? true : !x.customerId));
   const isPdf = r.file?.type === "application/pdf";
 
   return (
@@ -72,14 +81,15 @@ export default function ReportPrintPage() {
 
       <article className="print-plain rounded-2xl border border-line bg-surface p-6 md:p-10">
         {/* Phones: the title goes under the clinic's details; wider screens and paper: side by side. */}
-        <header className="flex flex-col gap-3 border-b-2 border-jade-deep pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 print:flex-row print:items-start print:justify-between print:gap-4">
-          <div className="flex min-w-0 items-start gap-3.5">
+        <header className="flex flex-col gap-3 border-b-2 border-jade-deep pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 print:flex-row print:items-center print:justify-between print:gap-4">
+          {/* The logo is centred on the name and address beside it, however many lines the address wraps to. */}
+          <div className="flex min-w-0 items-center gap-3.5">
             {/* The clinic's logo; an <img> so it prints even with "background graphics" off. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" width={56} height={56} alt="Logo Jade Physio" className="size-14 shrink-0 rounded-lg" />
             <div className="min-w-0">
-              <p className="text-xl font-bold text-jade-deep">{BUSINESS.name}</p>
-              {BUSINESS.address && <p className="text-[13px] text-muted">{BUSINESS.address}</p>}
+              <p className="text-xl leading-tight font-bold text-jade-deep">{BUSINESS.name}</p>
+              {BUSINESS.address && <p className="mt-0.5 text-[13px] leading-snug text-muted">{BUSINESS.address}</p>}
               {BUSINESS.phone && <p className="text-[13px] text-muted">{BUSINESS.phone}</p>}
             </div>
           </div>
@@ -101,6 +111,12 @@ export default function ReportPrintPage() {
           <dd>{r.serviceName}</dd>
           <dt className="text-muted">Fisioterapis</dt>
           <dd>{r.staffName}</dd>
+          {r.condition && (
+            <>
+              <dt className="text-muted">Kondisi</dt>
+              <dd className="font-semibold">{r.condition}</dd>
+            </>
+          )}
         </dl>
 
         <div className="mt-6 flex flex-col gap-5">
@@ -112,6 +128,20 @@ export default function ReportPrintPage() {
                 <p className="mt-1 text-[15px] whitespace-pre-line">{v}</p>
               </section>
             ))}
+          {(hasProgress(r) || r.progressNote?.trim()) && (
+            <section className="break-inside-avoid">
+              <h2 className="text-[13px] font-bold tracking-wide text-jade-deep uppercase">Progres pemulihan</h2>
+              {hasProgress(r) && <p className="mt-1 text-[15px]">{progressText(r).replace(/^./, (x) => x.toUpperCase())}</p>}
+              {r.progressNote?.trim() && <p className="mt-1 text-[15px] whitespace-pre-line">{r.progressNote}</p>}
+              <RecoveryProgress className="mt-3" reports={sessions} upTo={r.sessionAt} current={r.sessionAt} />
+            </section>
+          )}
+          {r.nextVisit?.trim() && (
+            <section>
+              <h2 className="text-[13px] font-bold tracking-wide text-jade-deep uppercase">Rencana kunjungan berikutnya</h2>
+              <p className="mt-1 text-[15px] whitespace-pre-line">{r.nextVisit}</p>
+            </section>
+          )}
         </div>
 
         {r.file && (

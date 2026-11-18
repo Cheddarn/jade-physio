@@ -497,10 +497,20 @@ export interface TherapyReport {
   dateKey: string;
   sessionAt: number;
   complaint?: string;
+  /** The case from the condition library the complaint matched or the physio picked (e.g. "Cervical Pain"). */
+  condition?: string | null;
+  /** History taken from the patient, in the physio's words. */
+  anamnesis?: string;
+  /** Mechanism of injury: filled in from the condition library, then adjusted by the physio. */
+  mechanism?: string;
   assessment?: string;
   treatment?: string;
   advice?: string;
   nextVisit?: string;
+  /** Recovery progression at this session: pain on the VAS (0-10) and the physio's estimate of recovery (0-100 %). */
+  pain?: number | null;
+  recovery?: number | null;
+  progressNote?: string;
   file?: ReportFile | null;
   createdAt: number;
   createdBy: string;

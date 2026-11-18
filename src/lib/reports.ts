@@ -1,4 +1,5 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { progressText } from "./progress";
 import { store } from "./store";
 import { DEMO_MODE, storage } from "./firebase";
 import { BUSINESS, addDays, dateKey, fromDateKey, longDate, time } from "./format";
@@ -41,7 +42,10 @@ export async function removeReportFile(f?: ReportFile | null) {
 
 export async function saveReport(
   booking: Row<Booking>,
-  fields: Pick<TherapyReport, "complaint" | "assessment" | "treatment" | "advice" | "nextVisit"> & { customerName?: string },
+  fields: Pick<
+    TherapyReport,
+    "complaint" | "condition" | "anamnesis" | "mechanism" | "assessment" | "treatment" | "advice" | "nextVisit" | "pain" | "recovery" | "progressNote"
+  > & { customerName?: string },
   file: ReportFile | null,
   by: string,
   existing?: TherapyReport | null,
@@ -151,6 +155,7 @@ export function reportMessage(r: TherapyReport, settings: Pick<Settings, "templa
     terapis: r.staffName,
     tindakan: r.treatment,
     saran: r.advice,
+    progres: progressText(r),
     kunjungan: r.nextVisit,
     // A demo file lives only in this browser; only real uploads have a link to share.
     pdf: r.file?.url && !r.file.url.startsWith("data:") ? r.file.url : "",
