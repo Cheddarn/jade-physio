@@ -21,7 +21,7 @@ import { useCan } from "@/lib/auth";
 import { PAYMENT_LABEL, dateTime, dayMonth, longDate, remaining, rupiah, rupiahShort, shortDate, time } from "@/lib/format";
 import { isManualReport } from "@/lib/reports";
 import { hasProgress } from "@/lib/progress";
-import { RecoveryProgress } from "@/components/RecoveryChart";
+import { RecoveryByCase } from "@/components/RecoveryChart";
 import type { Booking, Customer, Sale, TherapyReport, Visit, Voucher } from "@/lib/types";
 import { PurchaseHistory, SessionHistory } from "@/components/CustomerHistory";
 
@@ -218,7 +218,9 @@ export default function CustomerDetailPage() {
             {(reports ?? []).some(hasProgress) && (
               <Card className="mb-5 px-4 py-4">
                 <h3 className="font-bold">Progres pemulihan</h3>
-                <RecoveryProgress className="mt-3" reports={reports ?? []} table={false} />
+                <div className="mt-3">
+                  <RecoveryByCase reports={reports ?? []} />
+                </div>
               </Card>
             )}
             <SessionHistory bookings={visits} vouchers={vouchers ?? []} sales={sales} reports={reports ?? []} visits={walkIns ?? []} />

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cx } from "./ui";
 import { TrendBadge } from "./ClinicalFields";
 import { dayMonth, shortDate } from "@/lib/format";
-import { hasProgress, trend } from "@/lib/progress";
+import { caseLabel, caseOf, casesOf, hasProgress, trend } from "@/lib/progress";
 import type { TherapyReport } from "@/lib/types";
 
 /*
@@ -18,7 +18,7 @@ const INK = "#1f9a73"; // series colour, checked against the white surface (cont
 const GRID = "#e6e8eb";
 const MUTED = "#6b7280";
 
-type Point = Pick<TherapyReport, "pain" | "recovery" | "sessionAt" | "staffName"> & { id?: string };
+type Point = Pick<TherapyReport, "pain" | "recovery" | "sessionAt" | "staffName" | "condition"> & { id?: string };
 
 function Chart({
   title,
@@ -120,20 +120,24 @@ function Chart({
  */
 export function RecoveryProgress({
   reports,
+  condition,
   upTo,
   current,
   table = true,
   className,
 }: {
   reports: (Point & Pick<TherapyReport, "progressNote">)[];
+  /** Only this case's sessions: progress of another condition is a different line. */
+  condition: string | null | undefined;
   /** Only sessions up to this time (a printed report shows its history, not later sessions). */
   upTo?: number;
   current?: number;
   table?: boolean;
   className?: string;
 }) {
+  const k = caseOf({ condition });
   const points = reports
-    .filter((r) => hasProgress(r) && (upTo == null || r.sessionAt <= upTo))
+    .filter((r) => hasProgress(r) && caseOf(r) === k && (upTo == null || r.sessionAt <= upTo))
     .sort((a, b) => a.sessionAt - b.sessionAt)
     .slice(-12);
   if (!points.length) return null;
@@ -153,7 +157,9 @@ export function RecoveryProgress({
           )}
           {span && points.length > 2 && (
             <>
-              <span className="text-muted">Sejak sesi pertama ({dayMonth(first.sessionAt)}):</span>
+              <span className="text-muted">
+                Sejak sesi pertama {k ? `${k} ` : ""}({dayMonth(first.sessionAt)}):
+              </span>
               <TrendBadge t={span} />
             </>
           )}
@@ -190,6 +196,42 @@ export function RecoveryProgress({
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A patient's recovery, one condition at a time: with more than one condition, chips switch between them
+ * (the most recently treated first). Each condition keeps its own line.
+ */
+export function RecoveryByCase({ reports, table = false }: { reports: (Point & Pick<TherapyReport, "progressNote">)[]; table?: boolean }) {
+  const cases = casesOf(reports);
+  const [chosen, setChosen] = useState<string | null>(null);
+  if (!cases.length) return null;
+  const pick = cases.some((c) => c.condition === chosen) ? chosen! : cases[0].condition;
+  return (
+    <div className="flex flex-col gap-3">
+      {cases.length > 1 && (
+        <div role="group" aria-label="Kondisi" className="flex flex-wrap gap-1.5">
+          {cases.map((c) => (
+            <button
+              key={c.condition || "none"}
+              type="button"
+              aria-pressed={pick === c.condition}
+              onClick={() => setChosen(c.condition)}
+              className={cx(
+                "flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition-colors",
+                pick === c.condition ? "border-jade bg-jade-mist text-jade-deep" : "border-line text-ink-2 hover:border-ink-2/40",
+              )}
+            >
+              {caseLabel(c.condition)}
+              <span className="tnum font-normal text-muted">{c.sessions} sesi</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {cases.length === 1 && cases[0].condition && <p className="text-[13px] font-semibold text-jade-deep">{cases[0].condition}</p>}
+      <RecoveryProgress reports={reports} condition={pick} table={table} />
     </div>
   );
 }

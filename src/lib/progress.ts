@@ -35,3 +35,29 @@ export function trend(now: Progress, before?: Progress | null): Trend | null {
 export function progressText(r: Progress) {
   return [r.pain != null ? `nyeri ${r.pain}/10` : "", r.recovery != null ? `pemulihan ${r.recovery}%` : ""].filter(Boolean).join(", ");
 }
+
+/* ---------------- Per condition ----------------
+   Progress only means something within one case: a patient treated for low back pain who later comes with a tennis
+   elbow starts a new line. Reports are grouped by their condition; reports without one form their own group. */
+
+/** The case a report belongs to ("" = no condition picked). */
+export const caseOf = (r: { condition?: string | null }) => r.condition?.trim() || "";
+export const caseLabel = (c: string) => c || "Tanpa kondisi";
+
+/** The patient's earlier reports of the same case, newest first. */
+export function earlierOfCase<T extends Pick<TherapyReport, "condition" | "sessionAt">>(reports: T[], condition: string | null | undefined, before: number): T[] {
+  const k = caseOf({ condition });
+  return reports.filter((r) => caseOf(r) === k && r.sessionAt < before).sort((a, b) => b.sessionAt - a.sessionAt);
+}
+
+/** The cases among a patient's reports with progress, the most recently treated first. */
+export function casesOf<T extends Pick<TherapyReport, "condition" | "sessionAt" | "pain" | "recovery">>(reports: T[]) {
+  const latest = new Map<string, { at: number; n: number }>();
+  for (const r of reports) {
+    if (!hasProgress(r)) continue;
+    const k = caseOf(r);
+    const cur = latest.get(k);
+    latest.set(k, { at: Math.max(cur?.at ?? 0, r.sessionAt), n: (cur?.n ?? 0) + 1 });
+  }
+  return [...latest].sort((a, b) => b[1].at - a[1].at).map(([c, v]) => ({ condition: c, sessions: v.n }));
+}

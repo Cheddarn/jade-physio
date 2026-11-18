@@ -4,7 +4,7 @@ import { useState } from "react";
 import { BookOpen, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
 import { Field, Input, Textarea, cx } from "./ui";
 import { conditionByName, matchCondition, searchConditions, type Condition } from "@/lib/conditions";
-import { progressText, trend } from "@/lib/progress";
+import { caseLabel, caseOf, progressText, trend } from "@/lib/progress";
 import { shortDate } from "@/lib/format";
 import type { TherapyReport } from "@/lib/types";
 
@@ -31,7 +31,9 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
 
   function setComplaint(text: string) {
     const patch: Partial<Clinical> = { complaint: text };
-    if (!picked) {
+    // The case follows the complaint only while it is the complaint's own match (or empty): a case picked by hand,
+    // or continued from an earlier report, stays.
+    if (!picked && (!value.condition || matchCondition(value.complaint)?.name === value.condition)) {
       const next = matchCondition(text);
       if ((next?.name ?? null) !== (value.condition ?? null)) {
         patch.condition = next?.name ?? null;
@@ -168,19 +170,26 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
   );
 }
 
-/** Progres pemulihan: pain on the VAS and recovery %, against the previous session, plus a note. */
+/**
+ * Progres pemulihan: pain on the VAS and recovery %, plus a note, compared with the previous session of the same
+ * condition. Another condition's sessions are not compared: a new condition starts its own line.
+ */
 export function ProgressFields({
   value,
   onChange,
   last,
+  otherCases,
 }: {
   value: Clinical;
   onChange: (patch: Partial<Clinical>) => void;
-  /** The patient's previous report, to compare with. */
+  /** The patient's previous report of the same condition, to compare with. */
   last?: Pick<TherapyReport, "pain" | "recovery" | "sessionAt"> | null;
+  /** The patient has earlier reports, but only for other conditions. */
+  otherCases?: boolean;
 }) {
   const t = trend(value, last);
   const before = last ? progressText(last) : "";
+  const label = caseLabel(caseOf(value));
   return (
     <Field label="Progres pemulihan">
       <div className="flex flex-col gap-3 rounded-xl border border-line p-3.5">
@@ -204,10 +213,18 @@ export function ProgressFields({
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
             {before && (
               <span className="text-muted">
-                Sesi lalu{last?.sessionAt ? ` (${shortDate(last.sessionAt)})` : ""}: {before}.
+                Sesi lalu untuk {label}
+                {last?.sessionAt ? ` (${shortDate(last.sessionAt)})` : ""}: {before}.
               </span>
             )}
             {t && <TrendBadge t={t} />}
+          </p>
+        )}
+        {!last && otherCases && (
+          <p className="text-[13px] text-muted">
+            {caseOf(value)
+              ? `Sesi pertama untuk ${label}. Progres dihitung per kondisi; sesi kondisi lain tidak dibandingkan.`
+              : "Pilih kondisi di Keluhan agar progres dibandingkan dengan sesi kondisi yang sama."}
           </p>
         )}
         <Textarea

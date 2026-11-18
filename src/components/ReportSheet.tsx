@@ -1,16 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Copy, FileText, History, Paperclip, Trash2 } from "lucide-react";
+import { FileText, Paperclip, Trash2 } from "lucide-react";
 import { Button, Field, Input, Sheet, Textarea, cx, errorText, useToast } from "./ui";
+import { ReportHistory } from "./ReportHistory";
 import { useUser } from "@/lib/auth";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { MAX_REPORT_MB, REPORT_TYPES, daysLate, lateText, removeReportFile, saveReport, uploadReportFile } from "@/lib/reports";
 import { dateKey, longDate, shortDate, time } from "@/lib/format";
 import type { Row } from "@/lib/store";
 import type { Booking, ReportFile, ReportOptions, TherapyReport } from "@/lib/types";
-import { matchCondition } from "@/lib/conditions";
-import { progressText } from "@/lib/progress";
+import { conditionByName, matchCondition } from "@/lib/conditions";
+import { caseOf } from "@/lib/progress";
 import { HistoryFields, ProgressFields, type Clinical } from "./ClinicalFields";
 
 type Fields = Pick<TherapyReport, "customerName" | "assessment" | "treatment" | "advice" | "nextVisit"> & Clinical;
@@ -53,7 +54,6 @@ export function ReportSheet({
   const [pending, setPending] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [showLast, setShowLast] = useState(false);
   const [openedFor, setOpenedFor] = useState<string | null>(null);
   const key = booking?.id ?? null;
   if (key !== openedFor) {
@@ -79,19 +79,17 @@ export function ReportSheet({
       setFile(report?.file ?? null);
       setPending(null);
       setError("");
-      setShowLast(false);
     }
   }
 
-  // The same patient's last report: what was done then, and a starting point for today's.
+  // The patient's earlier reports (this app's and the report app's): read before writing, copy one as a starting point.
   const { rows: history } = useCollection<TherapyReport>(booking ? "reports" : null, [["customerId", "==", booking?.customerId ?? ""]]);
-  const last = useMemo(
-    () =>
-      (history ?? [])
-        .filter((r) => r.bookingId !== booking?.id && r.sessionAt < (booking?.startAt ?? 0))
-        .sort((a, b) => b.sessionAt - a.sessionAt)[0] ?? null,
+  const earlier = useMemo(
+    () => (history ?? []).filter((r) => r.bookingId !== booking?.id && r.sessionAt < (booking?.startAt ?? 0)).sort((a, b) => b.sessionAt - a.sessionAt),
     [history, booking],
   );
+  // Progress is compared within one condition: the latest earlier report of the case being written.
+  const lastSame = earlier.find((r) => caseOf(r) === caseOf(f)) ?? null;
 
   // The physio's own quick-pick phrases, added in the report app.
   const { row: own } = useDoc<ReportOptions>("reportOptions", booking?.staffId);
@@ -113,8 +111,7 @@ export function ReportSheet({
     setPending(x);
   }
 
-  function copyLast() {
-    if (!last) return;
+  function copyFrom(last: TherapyReport) {
     setF((x) => ({
       ...x,
       complaint: x.complaint?.trim() ? x.complaint : (last.complaint ?? ""),
@@ -127,7 +124,25 @@ export function ReportSheet({
       advice: last.advice ?? "",
       nextVisit: last.nextVisit ?? "",
     }));
-    toast("Isi laporan terakhir disalin. Sesuaikan dengan sesi ini.");
+    toast(`Isi laporan ${shortDate(last.sessionAt)} disalin. Sesuaikan dengan sesi ini.`);
+  }
+
+  // Continue a condition treated before: its case, and its complaint and mechanism as written last time.
+  function continueCase(condition: string) {
+    const last = earlier.find((r) => caseOf(r) === condition);
+    const lib = conditionByName(condition);
+    setF((x) => {
+      const ownMechanism = !!x.mechanism?.trim() && x.mechanism.trim() !== conditionByName(x.condition)?.mechanism;
+      // A complaint filled in from the booking or an earlier report is replaced; one the physio wrote stays.
+      const said = x.complaint?.trim() ?? "";
+      const filled = !said || said === (complaint ?? booking?.notes ?? "").trim() || earlier.some((r) => r.complaint?.trim() === said);
+      return {
+        ...x,
+        condition,
+        complaint: filled ? (last?.complaint ?? condition) : x.complaint,
+        mechanism: ownMechanism ? x.mechanism : last?.mechanism?.trim() || lib?.mechanism || "",
+      };
+    });
   }
 
   async function submit() {
@@ -189,43 +204,7 @@ export function ReportSheet({
             <Input id="rp-name" autoComplete="off" value={f.customerName ?? ""} onChange={(e) => set("customerName", e.target.value)} />
           </Field>
 
-          {last && !report && (
-            <div className="rounded-xl border border-line">
-              <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5">
-                <History className="size-4 shrink-0 text-jade" />
-                <button type="button" onClick={() => setShowLast((x) => !x)} aria-expanded={showLast} className="min-w-0 flex-1 text-left text-sm">
-                  <span className="font-semibold">Laporan terakhir</span>
-                  <span className="block truncate text-[12px] text-muted">
-                    {shortDate(last.sessionAt)}, {last.staffName}. {showLast ? "Sembunyikan" : "Lihat"}
-                  </span>
-                </button>
-                <Button size="sm" variant="secondary" icon={<Copy className="size-3.5" />} onClick={copyLast}>
-                  Salin isinya
-                </Button>
-              </div>
-              {showLast && (
-                <dl className="grid gap-2 border-t border-line-soft px-3.5 py-3 text-[13px]">
-                  {(
-                    [
-                      ["Kondisi", last.condition ?? ""],
-                      ["Pemeriksaan", last.assessment],
-                      ["Tindakan", last.treatment],
-                      ["Saran", last.advice],
-                      ["Progres", progressText(last)],
-                      ["Rencana", last.nextVisit],
-                    ] as const
-                  )
-                    .filter(([, v]) => v?.trim())
-                    .map(([k, v]) => (
-                      <div key={k}>
-                        <dt className="font-semibold text-ink-2">{k}</dt>
-                        <dd className="whitespace-pre-line text-muted">{v}</dd>
-                      </div>
-                    ))}
-                </dl>
-              )}
-            </div>
-          )}
+          <ReportHistory reports={earlier} condition={f.condition} onCopy={copyFrom} onContinue={continueCase} />
 
           <HistoryFields key={openedFor ?? ""} value={f} onChange={setClinical} />
           <Field label="Pemeriksaan / temuan" htmlFor="rp-a">
@@ -239,7 +218,7 @@ export function ReportSheet({
             <Chips items={extra(ADVICE, own?.advice)} value={f.advice} onPick={(x) => set("advice", toggleItem(f.advice, x))} label="Saran" />
             <Textarea id="rp-s" className="min-h-16" {...text("advice")} />
           </Field>
-          <ProgressFields value={f} onChange={setClinical} last={last} />
+          <ProgressFields value={f} onChange={setClinical} last={lastSame} otherCases={earlier.length > 0 && !lastSame} />
           <Field label="Rencana kunjungan berikutnya" htmlFor="rp-n">
             <Chips items={NEXT} value={f.nextVisit} onPick={(x) => set("nextVisit", hasItem(f.nextVisit, x) ? "" : x)} label="Kunjungan berikutnya" />
             <Textarea id="rp-n" className="min-h-12" placeholder="mis. 3 hari lagi, evaluasi ROM" {...text("nextVisit")} />

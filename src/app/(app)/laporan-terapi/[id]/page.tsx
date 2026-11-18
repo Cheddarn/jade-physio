@@ -9,8 +9,7 @@ import { useCollection, useDoc } from "@/lib/hooks";
 import { RecoveryProgress } from "@/components/RecoveryChart";
 import { hasProgress, progressText } from "@/lib/progress";
 import { BUSINESS, longDate, time } from "@/lib/format";
-import type { Customer, TherapyReport } from "@/lib/types";
-import { ageFrom } from "@/lib/flow";
+import type { TherapyReport } from "@/lib/types";
 import { toBlobUrl } from "@/lib/reports";
 
 /** Printable therapy report. "Cetak / simpan PDF" makes the PDF when the physio didn't upload one. */
@@ -18,7 +17,6 @@ export default function ReportPrintPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { row: r, loading } = useDoc<TherapyReport>("reports", id);
-  const { row: c } = useDoc<Customer>("customers", r?.customerId);
   // The patient's other sessions, for the recovery progression (a typed name: its reports without a patient on file).
   const { rows: history } = useCollection<TherapyReport>(
     r ? "reports" : null,
@@ -45,7 +43,6 @@ export default function ReportPrintPage() {
         }
       />
     );
-  const age = ageFrom(c?.profile?.birthDate);
   const sections: [string, string | undefined][] = [
     ["Keluhan", r.complaint],
     ["Anamnesis", r.anamnesis],
@@ -99,16 +96,10 @@ export default function ReportPrintPage() {
         <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
           <dt className="text-muted">Pasien</dt>
           <dd className="font-semibold">{r.customerName}</dd>
-          <dt className="text-muted">No. RM</dt>
-          <dd>{c?.profile?.medicalRecordNo ?? "-"}</dd>
-          <dt className="text-muted">Usia</dt>
-          <dd>{age != null ? `${age} tahun` : "-"}</dd>
           <dt className="text-muted">Tanggal</dt>
           <dd>
             {longDate(r.sessionAt)}, {time(r.sessionAt)}
           </dd>
-          <dt className="text-muted">Layanan</dt>
-          <dd>{r.serviceName}</dd>
           <dt className="text-muted">Fisioterapis</dt>
           <dd>{r.staffName}</dd>
           {r.condition && (
@@ -133,7 +124,7 @@ export default function ReportPrintPage() {
               <h2 className="text-[13px] font-bold tracking-wide text-jade-deep uppercase">Progres pemulihan</h2>
               {hasProgress(r) && <p className="mt-1 text-[15px]">{progressText(r).replace(/^./, (x) => x.toUpperCase())}</p>}
               {r.progressNote?.trim() && <p className="mt-1 text-[15px] whitespace-pre-line">{r.progressNote}</p>}
-              <RecoveryProgress className="mt-3" reports={sessions} upTo={r.sessionAt} current={r.sessionAt} />
+              <RecoveryProgress className="mt-3" reports={sessions} condition={r.condition} upTo={r.sessionAt} current={r.sessionAt} />
             </section>
           )}
           {r.nextVisit?.trim() && (
