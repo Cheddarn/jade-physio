@@ -71,13 +71,19 @@ export default function ReportPrintPage() {
       </div>
 
       <article className="print-plain rounded-2xl border border-line bg-surface p-6 md:p-10">
-        <header className="flex items-start justify-between gap-4 border-b-2 border-jade-deep pb-4">
-          <div>
-            <p className="text-xl font-bold text-jade-deep">{BUSINESS.name}</p>
-            {BUSINESS.address && <p className="text-[13px] text-muted">{BUSINESS.address}</p>}
-            {BUSINESS.phone && <p className="text-[13px] text-muted">{BUSINESS.phone}</p>}
+        {/* Phones: the title goes under the clinic's details; wider screens and paper: side by side. */}
+        <header className="flex flex-col gap-3 border-b-2 border-jade-deep pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 print:flex-row print:items-start print:justify-between print:gap-4">
+          <div className="flex min-w-0 items-start gap-3.5">
+            {/* The clinic's logo; an <img> so it prints even with "background graphics" off. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" width={56} height={56} alt="Logo Jade Physio" className="size-14 shrink-0 rounded-lg" />
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-jade-deep">{BUSINESS.name}</p>
+              {BUSINESS.address && <p className="text-[13px] text-muted">{BUSINESS.address}</p>}
+              {BUSINESS.phone && <p className="text-[13px] text-muted">{BUSINESS.phone}</p>}
+            </div>
           </div>
-          <p className="text-right text-sm font-bold tracking-wide uppercase">Laporan fisioterapi</p>
+          <p className="shrink-0 text-sm font-bold tracking-wide uppercase sm:text-right print:text-right">Laporan fisioterapi</p>
         </header>
 
         <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
