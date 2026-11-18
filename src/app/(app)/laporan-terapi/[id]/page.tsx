@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Download, FileDown, Printer } from "lucide-react";
-import { Button, Empty, Spinner, useToast } from "@/components/ui";
+import { Archive, ArrowLeft, Download, FileDown, PenLine, Printer } from "lucide-react";
+import { Button, Empty, Sheet, Spinner, useToast } from "@/components/ui";
+import { SignatureField } from "@/components/SignatureField";
+import { useUser } from "@/lib/auth";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { RecoveryProgress } from "@/components/RecoveryChart";
 import { hasProgress, progressText } from "@/lib/progress";
@@ -17,6 +19,7 @@ export default function ReportPrintPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
+  const user = useUser();
   const [making, setMaking] = useState(false);
   const { row: r, loading } = useDoc<TherapyReport>("reports", id);
   // The patient's other sessions, for the recovery progression (a typed name: its reports without a patient on file).
@@ -28,6 +31,7 @@ export default function ReportPrintPage() {
   // The physio's signature, uploaded once in the report form.
   const { row: opts } = useDoc<ReportOptions>("reportOptions", r?.staffId || null);
   const signature = opts?.signature ?? null;
+  const [signing, setSigning] = useState(false);
   useEffect(() => {
     if (!r?.file?.url) return setFileUrl(null);
     const u = toBlobUrl(r.file.url);
@@ -58,6 +62,9 @@ export default function ReportPrintPage() {
   ];
   const sessions = (history ?? []).filter((x) => (r.customerId ? true : !x.customerId));
   const isPdf = r.file?.type === "application/pdf";
+
+  // The desk, or the physio themself, can add or change the signature from here.
+  const canSign = user.role === "admin" || user.role === "manager" || (!!user.staffId && user.staffId === r.staffId);
 
   async function makePdf() {
     setMaking(true);
@@ -182,13 +189,33 @@ export default function ReportPrintPage() {
             {signature ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={signature} alt={`Tanda tangan ${r.staffName}`} className="mt-2 h-16 max-w-full object-contain" />
+            ) : canSign ? (
+              // On screen only: add it here, it shows at once and on every report this physio signs.
+              <button
+                type="button"
+                onClick={() => setSigning(true)}
+                className="no-print mt-2 flex h-14 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-jade/60 text-[13px] font-semibold text-jade hover:bg-jade-mist/40"
+              >
+                <PenLine className="size-4" />
+                Tambah tanda tangan
+              </button>
             ) : (
               <div className="h-14" />
             )}
             <p className="mt-1 w-full border-t border-ink/40 pt-1 font-semibold">{r.staffName}</p>
+            {signature && canSign && (
+              <button type="button" onClick={() => setSigning(true)} className="no-print mt-1 text-[12px] font-semibold text-muted hover:text-jade">
+                Ganti tanda tangan
+              </button>
+            )}
           </div>
         </footer>
       </article>
+      {canSign && (
+        <Sheet open={signing} onClose={() => setSigning(false)} title="Tanda tangan fisioterapis">
+          <SignatureField staffId={r.staffId} staffName={r.staffName} editable />
+        </Sheet>
+      )}
     </div>
   );
 }
