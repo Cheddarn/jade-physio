@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, LogOut, Search, ShoppingBag } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, KeyRound, LogOut, Search, ShoppingBag } from "lucide-react";
+import { ChangePasswordSheet, hasEmailLogin } from "@/components/ChangePassword";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth, useCan, useUser } from "@/lib/auth";
 import { DEMO_MODE } from "@/lib/firebase";
@@ -14,6 +16,7 @@ import { ClockCard } from "@/components/Attendance";
 export default function LainnyaPage() {
   const user = useUser();
   const { signOut } = useAuth();
+  const [pw, setPw] = useState(false);
   const can = useCan();
   // Everything the bottom bar on phones has no room for.
   const visible = NAV.filter((n) => !n.cap || can(n.cap));
@@ -58,18 +61,28 @@ export default function LainnyaPage() {
           </section>
         ))}
 
-        <Card className="flex items-center gap-3 px-4 py-3.5">
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold">{user.name}</span>
-            <span className="block truncate text-[13px] text-muted">
-              {ROLE_LABEL[user.role]}, {user.email}
+        <Card className="divide-y divide-line-soft">
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-semibold">{user.name}</span>
+              <span className="block truncate text-[13px] text-muted">
+                {ROLE_LABEL[user.role]}, {user.email}
+              </span>
             </span>
-          </span>
-          <button onClick={signOut} className="flex h-10 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-danger hover:bg-danger-mist">
-            <LogOut className="size-4" />
-            Keluar
-          </button>
+            <button onClick={signOut} className="flex h-10 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-danger hover:bg-danger-mist">
+              <LogOut className="size-4" />
+              Keluar
+            </button>
+          </div>
+          {hasEmailLogin(user.email) && (
+            <button onClick={() => setPw(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold hover:bg-canvas">
+              <KeyRound className="size-[18px] text-jade" />
+              <span className="flex-1">Ganti kata sandi</span>
+              <ChevronRight className="size-4 text-muted" />
+            </button>
+          )}
         </Card>
+        <ChangePasswordSheet open={pw} onClose={() => setPw(false)} />
         {DEMO_MODE && (
           <>
             <DemoRoleSwitch />

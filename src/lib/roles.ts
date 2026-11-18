@@ -29,7 +29,7 @@ export const ROLE_SHORT: Record<Role, string> = {
 
 export const ROLE_HINT: Record<Role, string> = {
   admin: "Front desk. Semua menu, termasuk laporan pemasukan, katalog, pembatalan faktur, dan pengaturan akses. Tidak melihat harga restock dan laba.",
-  manager: "Dasbor, semua menu operasional, laporan, katalog, dan pembatalan faktur, plus memproses restock, melihat biaya serta laba, dan mengatur komisi fisioterapis. Tidak bisa mengatur akses login.",
+  manager: "Dasbor, semua menu operasional, laporan, katalog, dan pembatalan faktur, plus memproses restock, melihat biaya serta laba, mengatur komisi fisioterapis, dan membuat akun login untuk semua peran.",
   therapist: "Alur pasien dan jadwal sendiri, keluhan pasien, laporan terapi, dan komisi sendiri. Memulai dan menyelesaikan sesi, tanpa akses ke uang klinik.",
   cleaning: "Hanya tugas sepatu pasien di Alur pasien: ganti sepatu saat datang, kembalikan saat selesai.",
   patient: "Akun pasien: booking sendiri untuk dirinya dan keluarganya. Pasien biasanya mendaftar sendiri.",
@@ -102,7 +102,8 @@ const MANAGER_ONLY: Cap[] = ["restock.manage", "profit", "commission", "commissi
 
 const CAPS: Record<Role, Cap[]> = {
   admin: ALL.filter((c) => !MANAGER_ONLY.includes(c)),
-  manager: ALL.filter((c) => c !== "team"),
+  // The manager also runs the team: calendar columns and logins for every role.
+  manager: ALL,
   therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock", "commission"],
   cleaning: ["flow.view", "restock"],
   patient: ["portal"],

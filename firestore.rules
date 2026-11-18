@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Roles (collection "access", keyed by lowercase email):
 //   admin     - front desk; everything except restock orders, costs and profit
-//   manager   - everything except the access list, plus restock orders, costs, profit and commission rules
+//   manager   - everything, including the access list, plus restock orders, costs, profit and commission rules
 //   therapist - read schedule and patients; can only start/finish their own sessions and write their reports
 //   cleaning  - patient flow only: mark shoes changed / returned
 //   patient   - self-registered; own portal account and own booking requests only
@@ -73,10 +73,10 @@ service cloud.firestore {
 
     // ---------- access list ----------
     match /access/{email} {
-      allow read: if signedIn() && (myId() == email || isAdmin());
-      // Admins add people. The very first account may add itself as admin once,
+      allow read: if signedIn() && (myId() == email || isManager());
+      // Admins and managers add people, in any role. The very first account may add itself as admin once,
       // in the same batch that creates meta/setup.
-      allow create: if isAdmin()
+      allow create: if isManager()
         || (signedIn() && myId() == email && !setupDone()
             && existsAfter(/databases/$(database)/documents/meta/setup)
             && request.resource.data.role == 'admin')
@@ -84,7 +84,7 @@ service cloud.firestore {
         || (signedIn() && myId() == email && setupDone()
             && request.resource.data.role == 'patient');
       // Nobody can change or remove their own access.
-      allow update, delete: if isAdmin() && myId() != email;
+      allow update, delete: if isManager() && myId() != email;
     }
 
     match /meta/setup {

@@ -6,6 +6,7 @@ import { BUSINESS, addDays, dateKey, fromDateKey, longDate, time } from "./forma
 import { waMessage } from "./templates";
 import type { Booking, ReportFile, Settings, TherapyReport, Visit } from "./types";
 import type { Row } from "./store";
+import { nextVisitText } from "./next-visit";
 
 export const REPORT_TYPES = "application/pdf,image/jpeg,image/png";
 export const MAX_REPORT_MB = 10;
@@ -44,7 +45,7 @@ export async function saveReport(
   booking: Row<Booking>,
   fields: Pick<
     TherapyReport,
-    "complaint" | "condition" | "anamnesis" | "mechanism" | "assessment" | "treatment" | "advice" | "nextVisit" | "pain" | "recovery" | "progressNote"
+    "complaint" | "condition" | "anamnesis" | "mechanism" | "assessment" | "treatment" | "advice" | "nextVisit" | "nextVisitDate" | "pain" | "recovery" | "progressNote"
   > & { customerName?: string },
   file: ReportFile | null,
   by: string,
@@ -156,7 +157,7 @@ export function reportMessage(r: TherapyReport, settings: Pick<Settings, "templa
     tindakan: r.treatment,
     saran: r.advice,
     progres: progressText(r),
-    kunjungan: r.nextVisit,
+    kunjungan: nextVisitText(r),
     // A demo file lives only in this browser; only real uploads have a link to share.
     pdf: r.file?.url && !r.file.url.startsWith("data:") ? r.file.url : "",
   });

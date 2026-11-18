@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cx } from "./ui";
 import { TrendBadge } from "./ClinicalFields";
 import { dayMonth, shortDate } from "@/lib/format";
-import { caseLabel, caseOf, casesOf, hasProgress, trend } from "@/lib/progress";
+import { caseLabel, caseOf, caseSessions, casesOf, trend } from "@/lib/progress";
 import type { TherapyReport } from "@/lib/types";
 
 /*
@@ -136,10 +136,7 @@ export function RecoveryProgress({
   className?: string;
 }) {
   const k = caseOf({ condition });
-  const points = reports
-    .filter((r) => hasProgress(r) && caseOf(r) === k && (upTo == null || r.sessionAt <= upTo))
-    .sort((a, b) => a.sessionAt - b.sessionAt)
-    .slice(-12);
+  const points = caseSessions(reports, condition, upTo);
   if (!points.length) return null;
   const now = points[points.length - 1];
   const t = trend(now, points[points.length - 2]);

@@ -507,6 +507,8 @@ export interface TherapyReport {
   treatment?: string;
   advice?: string;
   nextVisit?: string;
+  /** The date of the next visit (YYYY-MM-DD), when one is planned. */
+  nextVisitDate?: string | null;
   /** Recovery progression at this session: pain on the VAS (0-10) and the physio's estimate of recovery (0-100 %). */
   pain?: number | null;
   recovery?: number | null;
@@ -626,6 +628,9 @@ export interface ReportOptions {
   treatments: string[];
   advice: string[];
   updatedAt: number;
+  /** The physio's signature for reports: a small transparent PNG (data URL), cleaned up from a photo. */
+  signature?: string | null;
+  signatureAt?: number;
 }
 
 export interface Access {

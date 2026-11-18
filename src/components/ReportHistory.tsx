@@ -5,6 +5,7 @@ import { ChevronDown, Copy, History } from "lucide-react";
 import { cx } from "./ui";
 import { shortDate, time } from "@/lib/format";
 import { caseLabel, caseOf, progressText } from "@/lib/progress";
+import { nextVisitText } from "@/lib/next-visit";
 import type { TherapyReport } from "@/lib/types";
 
 /* The patient's earlier reports inside the report form, to read before writing. Same file in both apps. */
@@ -120,7 +121,7 @@ export function ReportHistory({
                       ["Tindakan", r.treatment],
                       ["Saran", r.advice],
                       ["Progres", [progress, r.progressNote].filter(Boolean).join(". ")],
-                      ["Rencana", r.nextVisit],
+                      ["Rencana", nextVisitText(r)],
                     ] as const
                   )
                     .filter(([, v]) => v?.trim())

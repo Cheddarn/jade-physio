@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import { Ellipsis, LogOut, ShoppingBag } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Ellipsis, KeyRound, LogOut, ShoppingBag } from "lucide-react";
+import { ChangePasswordSheet, hasEmailLogin } from "./ChangePassword";
 import { cx } from "./ui";
 import { useAuth, useCan, useUser } from "@/lib/auth";
 import { ROLES, ROLE_LABEL, ROLE_SHORT, type Role } from "@/lib/roles";
@@ -53,6 +54,7 @@ function Shell({ children }: { children: ReactNode }) {
   const user = useUser();
   const can = useCan();
   const { signOut } = useAuth();
+  const [pw, setPw] = useState(false);
   const nav = NAV.filter((n) => !n.cap || can(n.cap));
   const groups = NAV_GROUPS.map((g) => ({ ...g, items: nav.filter((n) => n.group === g.id) })).filter((g) => g.items.length);
   const mobileNav = mobileTabs(user.role, nav);
@@ -115,6 +117,16 @@ function Shell({ children }: { children: ReactNode }) {
               <p className="truncate text-sm font-semibold">{user.name}</p>
               <p className="truncate text-xs text-muted">{ROLE_LABEL[user.role]}</p>
             </div>
+            {hasEmailLogin(user.email) && (
+              <button
+                onClick={() => setPw(true)}
+                aria-label="Ganti kata sandi"
+                title="Ganti kata sandi"
+                className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-soft hover:text-ink"
+              >
+                <KeyRound className="size-4" />
+              </button>
+            )}
             <button
               onClick={signOut}
               aria-label="Keluar"
@@ -126,6 +138,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
+      <ChangePasswordSheet open={pw} onClose={() => setPw(false)} />
 
       <main className="pb-[calc(72px+var(--safe-bottom))] md:pb-0 print:!pb-0">{children}</main>
       <CommandPalette />

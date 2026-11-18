@@ -3,19 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Download, Printer } from "lucide-react";
-import { Button, Empty, Spinner } from "@/components/ui";
+import { ArrowLeft, Download, FileDown, Printer } from "lucide-react";
+import { Button, Empty, Spinner, useToast } from "@/components/ui";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { RecoveryProgress } from "@/components/RecoveryChart";
 import { hasProgress, progressText } from "@/lib/progress";
 import { BUSINESS, longDate, time } from "@/lib/format";
-import type { TherapyReport } from "@/lib/types";
+import type { ReportOptions, TherapyReport } from "@/lib/types";
 import { toBlobUrl } from "@/lib/reports";
 
-/** Printable therapy report. "Cetak / simpan PDF" makes the PDF when the physio didn't upload one. */
+/** The therapy report: "Unduh PDF" saves it as a PDF file to send or keep, "Cetak" prints it. */
 export default function ReportPrintPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const toast = useToast();
+  const [making, setMaking] = useState(false);
   const { row: r, loading } = useDoc<TherapyReport>("reports", id);
   // The patient's other sessions, for the recovery progression (a typed name: its reports without a patient on file).
   const { rows: history } = useCollection<TherapyReport>(
@@ -23,6 +25,9 @@ export default function ReportPrintPage() {
     r?.customerId ? [["customerId", "==", r.customerId]] : [["customerName", "==", r?.customerName ?? ""]],
   );
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  // The physio's signature, uploaded once in the report form.
+  const { row: opts } = useDoc<ReportOptions>("reportOptions", r?.staffId || null);
+  const signature = opts?.signature ?? null;
   useEffect(() => {
     if (!r?.file?.url) return setFileUrl(null);
     const u = toBlobUrl(r.file.url);
@@ -54,6 +59,20 @@ export default function ReportPrintPage() {
   const sessions = (history ?? []).filter((x) => (r.customerId ? true : !x.customerId));
   const isPdf = r.file?.type === "application/pdf";
 
+  async function makePdf() {
+    setMaking(true);
+    try {
+      // The PDF maker is only loaded when asked for.
+      const { downloadReportPdf } = await import("@/lib/report-pdf");
+      await downloadReportPdf(r!, sessions, signature);
+    } catch (e) {
+      console.error(e);
+      toast("PDF gagal dibuat. Coba lagi, atau pakai Cetak lalu pilih Simpan sebagai PDF.", "error");
+    } finally {
+      setMaking(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 pt-4 pb-16 md:px-8 md:pt-8 print:p-0">
       <style>{`@media print { @page { size: A4; margin: 16mm; } }`}</style>
@@ -62,7 +81,7 @@ export default function ReportPrintPage() {
           <ArrowLeft className="size-4" />
           Laporan terapi
         </button>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           {r.file && (
             <a href={fileUrl ?? r.file.url} download={r.file.name} target="_blank" rel="noreferrer">
               <Button variant="secondary" icon={<Download className="size-4" />}>
@@ -70,8 +89,11 @@ export default function ReportPrintPage() {
               </Button>
             </a>
           )}
-          <Button icon={<Printer className="size-4" />} onClick={() => window.print()}>
-            Cetak / simpan PDF
+          <Button variant="secondary" icon={<Printer className="size-4" />} onClick={() => window.print()}>
+            Cetak
+          </Button>
+          <Button icon={<FileDown className="size-4" />} loading={making} onClick={makePdf}>
+            Unduh PDF
           </Button>
         </div>
       </div>
@@ -127,10 +149,11 @@ export default function ReportPrintPage() {
               <RecoveryProgress className="mt-3" reports={sessions} condition={r.condition} upTo={r.sessionAt} current={r.sessionAt} />
             </section>
           )}
-          {r.nextVisit?.trim() && (
+          {(r.nextVisit?.trim() || r.nextVisitDate) && (
             <section>
               <h2 className="text-[13px] font-bold tracking-wide text-jade-deep uppercase">Rencana kunjungan berikutnya</h2>
-              <p className="mt-1 text-[15px] whitespace-pre-line">{r.nextVisit}</p>
+              {r.nextVisitDate && <p className="mt-1 text-[15px] font-semibold">{longDate(r.nextVisitDate)}</p>}
+              {r.nextVisit?.trim() && <p className="mt-1 text-[15px] whitespace-pre-line">{r.nextVisit}</p>}
             </section>
           )}
         </div>
@@ -147,10 +170,16 @@ export default function ReportPrintPage() {
           </div>
         )}
 
-        <footer className="mt-12 flex justify-end text-center text-sm">
-          <div>
+        <footer className="mt-12 flex justify-end text-center text-sm break-inside-avoid">
+          <div className="flex w-56 flex-col items-center">
             <p className="text-muted">Fisioterapis</p>
-            <p className="mt-14 border-t border-ink/40 pt-1 font-semibold">{r.staffName}</p>
+            {signature ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={signature} alt={`Tanda tangan ${r.staffName}`} className="mt-2 h-16 max-w-full object-contain" />
+            ) : (
+              <div className="h-14" />
+            )}
+            <p className="mt-1 w-full border-t border-ink/40 pt-1 font-semibold">{r.staffName}</p>
           </div>
         </footer>
       </article>

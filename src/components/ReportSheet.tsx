@@ -4,6 +4,9 @@ import { useMemo, useRef, useState } from "react";
 import { FileText, Paperclip, Trash2 } from "lucide-react";
 import { Button, Field, Input, Sheet, Textarea, cx, errorText, useToast } from "./ui";
 import { ReportHistory } from "./ReportHistory";
+import { SignatureField } from "./SignatureField";
+import { NextVisitField } from "./NextVisitField";
+import { nextVisitDateFor } from "@/lib/next-visit";
 import { useUser } from "@/lib/auth";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { MAX_REPORT_MB, REPORT_TYPES, daysLate, lateText, removeReportFile, saveReport, uploadReportFile } from "@/lib/reports";
@@ -14,14 +17,13 @@ import { conditionByName, matchCondition } from "@/lib/conditions";
 import { caseOf } from "@/lib/progress";
 import { HistoryFields, ProgressFields, type Clinical } from "./ClinicalFields";
 
-type Fields = Pick<TherapyReport, "customerName" | "assessment" | "treatment" | "advice" | "nextVisit"> & Clinical;
+type Fields = Pick<TherapyReport, "customerName" | "assessment" | "treatment" | "advice" | "nextVisit" | "nextVisitDate"> & Clinical;
 
 export const fileSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /* One tap adds the phrase, so a report takes a minute instead of a paragraph of typing. */
 const TREATMENTS = ["TENS", "Ultrasound", "Infrared", "Manual terapi", "Mobilisasi sendi", "Stretching", "Exercise terapi", "Penguatan otot", "Dry needling", "Kinesio taping", "Traksi", "Massage"];
 const ADVICE = ["Kompres hangat 2x sehari 15 menit", "Kompres es 10 menit bila nyeri", "Latihan peregangan pagi dan sore", "Hindari angkat beban berat", "Perbaiki posisi duduk", "Istirahat cukup"];
-const NEXT = ["2 hari lagi", "3 hari lagi", "1 minggu lagi", "2 minggu lagi", "Tidak perlu kontrol"];
 
 /** "TENS, Ultrasound": tapping a phrase that is already there takes it out again. */
 function toggleItem(text: string | undefined, item: string) {
@@ -75,6 +77,7 @@ export function ReportSheet({
         treatment: report?.treatment ?? "",
         advice: report?.advice ?? "",
         nextVisit: report?.nextVisit ?? "",
+        nextVisitDate: report?.nextVisitDate ?? null,
       });
       setFile(report?.file ?? null);
       setPending(null);
@@ -123,6 +126,8 @@ export function ReportSheet({
       treatment: last.treatment ?? "",
       advice: last.advice ?? "",
       nextVisit: last.nextVisit ?? "",
+      // "3 hari lagi" from this session, not from the one copied.
+      nextVisitDate: booking ? (nextVisitDateFor(last.nextVisit, booking.dateKey) ?? null) : null,
     }));
     toast(`Isi laporan ${shortDate(last.sessionAt)} disalin. Sesuaikan dengan sesi ini.`);
   }
@@ -219,10 +224,7 @@ export function ReportSheet({
             <Textarea id="rp-s" className="min-h-16" {...text("advice")} />
           </Field>
           <ProgressFields value={f} onChange={setClinical} last={lastSame} otherCases={earlier.length > 0 && !lastSame} />
-          <Field label="Rencana kunjungan berikutnya" htmlFor="rp-n">
-            <Chips items={NEXT} value={f.nextVisit} onPick={(x) => set("nextVisit", hasItem(f.nextVisit, x) ? "" : x)} label="Kunjungan berikutnya" />
-            <Textarea id="rp-n" className="min-h-12" placeholder="mis. 3 hari lagi, evaluasi ROM" {...text("nextVisit")} />
-          </Field>
+          <NextVisitField value={f} onChange={(p) => setF((x) => ({ ...x, ...p }))} sessionDay={booking.dateKey} />
 
           <Field label="File laporan (opsional)" hint={`PDF, JPG, atau PNG, maks ${MAX_REPORT_MB} MB. Tanpa file, sistem membuat PDF dari isian di atas.`}>
             <input ref={input} type="file" accept={REPORT_TYPES} className="hidden" onChange={(e) => pick(e.target.files)} />
@@ -264,6 +266,13 @@ export function ReportSheet({
               </button>
             )}
           </Field>
+
+          {/* The physio's signature, set once and used on every report they sign. Theirs to change, or the desk's. */}
+          <SignatureField
+            staffId={booking.staffId}
+            staffName={booking.staffName}
+            editable={user.staffId === booking.staffId || user.role === "admin" || user.role === "manager"}
+          />
         </div>
       )}
     </Sheet>

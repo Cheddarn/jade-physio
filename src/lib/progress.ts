@@ -61,3 +61,17 @@ export function casesOf<T extends Pick<TherapyReport, "condition" | "sessionAt" 
   }
   return [...latest].sort((a, b) => b[1].at - a[1].at).map(([c, v]) => ({ condition: c, sessions: v.n }));
 }
+
+/** The sessions charted for one case: those with progress, up to a session (a report shows its history, not later
+ *  sessions), oldest first, the last twelve. */
+export function caseSessions<T extends Pick<TherapyReport, "condition" | "sessionAt" | "pain" | "recovery">>(
+  reports: T[],
+  condition: string | null | undefined,
+  upTo?: number,
+): T[] {
+  const k = caseOf({ condition });
+  return reports
+    .filter((r) => hasProgress(r) && caseOf(r) === k && (upTo == null || r.sessionAt <= upTo))
+    .sort((a, b) => a.sessionAt - b.sessionAt)
+    .slice(-12);
+}
