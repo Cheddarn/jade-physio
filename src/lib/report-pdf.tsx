@@ -55,8 +55,11 @@ const s = StyleSheet.create({
   infoValue: { flex: 1 },
   section: { marginTop: 13 },
   h2: { fontSize: 8.5, fontWeight: 700, color: C.jadeDeep, letterSpacing: 0.6, textTransform: "uppercase" },
-  body: { marginTop: 3, lineHeight: 1.45 },
-  trendRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 8 },
+  // In points: a plain number here is read as a much larger gap than it says.
+  body: { marginTop: 3, lineHeight: "15pt" },
+  trendRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 5 },
+  // Each label stays on the same line as its badge.
+  trendPair: { flexDirection: "row", alignItems: "center", marginTop: 3 },
   trendLead: { fontSize: 9, color: C.muted, marginRight: 5 },
   badge: { fontSize: 9, fontWeight: 600, borderRadius: 4, paddingVertical: 2, paddingHorizontal: 6, marginRight: 10 },
   charts: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
@@ -149,18 +152,18 @@ function Progress({ r, sessions }: { r: TherapyReport; sessions: Session[] }) {
       {(t || span) && (
         <View style={s.trendRow}>
           {t && (
-            <>
+            <View style={s.trendPair}>
               <Text style={s.trendLead}>Dibanding sesi lalu:</Text>
               <Badge t={t} />
-            </>
+            </View>
           )}
           {span && (
-            <>
+            <View style={s.trendPair}>
               <Text style={s.trendLead}>
                 Sejak sesi pertama{r.condition ? ` ${r.condition}` : ""} ({dayMonth(points[0].sessionAt)}):
               </Text>
               <Badge t={span} />
-            </>
+            </View>
           )}
         </View>
       )}
@@ -262,8 +265,9 @@ function ReportDoc({
               </View>
             ))}
 
+          {/* Kept on one page: the heading, how it compares, both charts and the table. */}
           {(hasProgress(r) || r.progressNote?.trim()) && (
-            <View style={s.section}>
+            <View style={s.section} wrap={false}>
               <Text style={s.h2} minPresenceAhead={60}>
                 Progres pemulihan
               </Text>

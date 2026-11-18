@@ -168,7 +168,7 @@ export function RecoveryProgress({
       </div>
       {table && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-left text-[13px]">
+          <table className="w-full text-left text-[13px]">
             <caption className="sr-only">Progres pemulihan per sesi</caption>
             <thead>
               <tr className="border-b border-line text-muted">
@@ -176,20 +176,32 @@ export function RecoveryProgress({
                 <th className="py-1.5 pr-3 font-semibold">Tanggal</th>
                 <th className="py-1.5 pr-3 text-right font-semibold">Nyeri</th>
                 <th className="py-1.5 pr-3 text-right font-semibold">Pemulihan</th>
-                <th className="py-1.5 font-semibold">Catatan</th>
+                <th className="hidden py-1.5 font-semibold sm:table-cell print:table-cell">Catatan</th>
               </tr>
             </thead>
-            <tbody>
-              {points.map((p, i) => (
-                <tr key={p.id ?? p.sessionAt} className={cx("border-b border-line-soft align-top", current === p.sessionAt && "font-semibold")}>
-                  <td className="tnum py-1.5 pr-3">{i + 1}</td>
-                  <td className="py-1.5 pr-3 whitespace-nowrap">{shortDate(p.sessionAt)}</td>
-                  <td className="tnum py-1.5 pr-3 text-right">{p.pain != null ? `${p.pain}/10` : "-"}</td>
-                  <td className="tnum py-1.5 pr-3 text-right">{p.recovery != null ? `${p.recovery}%` : "-"}</td>
-                  <td className="py-1.5 font-normal text-muted">{p.progressNote || p.staffName}</td>
-                </tr>
-              ))}
-            </tbody>
+            {points.map((p, i) => {
+              const note = p.progressNote || p.staffName;
+              return (
+                // One group per session: on a phone the note goes on its own line under the numbers, so the
+                // table never needs scrolling sideways.
+                <tbody key={p.id ?? p.sessionAt} className={cx("border-b border-line-soft", current === p.sessionAt && "font-semibold")}>
+                  <tr className="align-top">
+                    <td className="tnum py-1.5 pr-3">{i + 1}</td>
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{shortDate(p.sessionAt)}</td>
+                    <td className="tnum py-1.5 pr-3 text-right">{p.pain != null ? `${p.pain}/10` : "-"}</td>
+                    <td className="tnum py-1.5 pr-3 text-right">{p.recovery != null ? `${p.recovery}%` : "-"}</td>
+                    <td className="hidden py-1.5 font-normal text-muted sm:table-cell print:table-cell">{note}</td>
+                  </tr>
+                  {note && (
+                    <tr className="sm:hidden print:hidden">
+                      <td colSpan={4} className="pb-1.5 text-[12.5px] leading-snug font-normal text-muted">
+                        {note}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              );
+            })}
           </table>
         </div>
       )}
