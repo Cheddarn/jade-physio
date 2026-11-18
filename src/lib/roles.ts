@@ -64,6 +64,8 @@ export type Cap =
   | "profit" // costs, gross and net profit
   | "commission" // the commission page: the manager sees everyone, a physio their own
   | "commission.manage" // rates, on/off, daily compensation
+  | "reports.archive" // archive therapy reports by date range
+  | "data.reset" // clear test data before going live (admin)
   | "portal";
 
 const ALL: Cap[] = [
@@ -95,15 +97,20 @@ const ALL: Cap[] = [
   "profit",
   "commission",
   "commission.manage",
+  "reports.archive",
+  "data.reset",
 ];
 
 /** Only the manager: buying stock, costs, profit and what the physios are paid. Admin, the front desk, does everything else. */
 const MANAGER_ONLY: Cap[] = ["restock.manage", "profit", "commission", "commission.manage"];
 
+/** Only the admin: clearing the test data. */
+const ADMIN_ONLY: Cap[] = ["data.reset"];
+
 const CAPS: Record<Role, Cap[]> = {
   admin: ALL.filter((c) => !MANAGER_ONLY.includes(c)),
   // The manager also runs the team: calendar columns and logins for every role.
-  manager: ALL,
+  manager: ALL.filter((c) => !ADMIN_ONLY.includes(c)),
   therapist: ["schedule.view", "customers.view", "flow.view", "reports.write", "reports.view", "restock", "commission"],
   cleaning: ["flow.view", "restock"],
   patient: ["portal"],
@@ -131,6 +138,7 @@ export const ROUTE_CAP: [prefix: string, cap: Cap][] = [
   ["/template-wa", "templates"],
   ["/pengingat", "memos"],
   ["/tim", "team"],
+  ["/bersihkan-data", "data.reset"],
 ];
 
 export function routeAllowed(role: Role | undefined, path: string) {

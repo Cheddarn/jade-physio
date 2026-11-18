@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartColumn,
   ClipboardList,
+  Eraser,
   FileText,
   Gauge,
   HandCoins,
@@ -47,6 +48,7 @@ export const NAV: { group: NavGroup; href: string; label: string; icon: typeof C
   { group: "atur", href: "/katalog", label: "Katalog", icon: LayoutGrid, cap: "catalog", sub: "Layanan dan paket sesi" },
   { group: "atur", href: "/template-wa", label: "Template WhatsApp", icon: MessageSquareText, cap: "templates", sub: "Teks pesan ke pasien" },
   { group: "atur", href: "/tim", label: "Terapis & akses", icon: UserCog, cap: "team", sub: "Kolom kalender dan akun login" },
+  { group: "atur", href: "/bersihkan-data", label: "Bersihkan data", icon: Eraser, cap: "data.reset", sub: "Hapus data uji coba sebelum mulai" },
 ];
 
 /** The four links on the phone's bottom bar; the rest sit under Lainnya. The manager gets the dashboard first. */

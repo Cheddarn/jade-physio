@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Download, FileDown, Printer } from "lucide-react";
+import { Archive, ArrowLeft, Download, FileDown, Printer } from "lucide-react";
 import { Button, Empty, Spinner, useToast } from "@/components/ui";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { RecoveryProgress } from "@/components/RecoveryChart";
 import { hasProgress, progressText } from "@/lib/progress";
-import { BUSINESS, longDate, time } from "@/lib/format";
+import { BUSINESS, longDate, shortDate, time } from "@/lib/format";
 import type { ReportOptions, TherapyReport } from "@/lib/types";
 import { toBlobUrl } from "@/lib/reports";
 
@@ -98,6 +98,12 @@ export default function ReportPrintPage() {
         </div>
       </div>
 
+      {r.archivedAt && (
+        <p className="no-print mb-3 flex items-center gap-2 rounded-xl bg-line-soft px-4 py-2.5 text-sm text-ink-2">
+          <Archive className="size-4 shrink-0" />
+          Diarsipkan {shortDate(r.archivedAt)}. Laporan ini tidak bisa diubah sampai dikembalikan dari Arsip.
+        </p>
+      )}
       <article className="print-plain rounded-2xl border border-line bg-surface p-6 md:p-10">
         {/* Phones: the title goes under the clinic's details; wider screens and paper: side by side. */}
         <header className="flex flex-col gap-3 border-b-2 border-jade-deep pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 print:flex-row print:items-center print:justify-between print:gap-4">

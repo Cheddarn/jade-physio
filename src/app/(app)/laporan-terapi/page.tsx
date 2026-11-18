@@ -4,8 +4,9 @@ import { Pager, usePager } from "@/components/Pager";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCopy, Download, FileText, MessageCircle, Pencil, Printer, Send } from "lucide-react";
+import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCopy, Download, FileText, MessageCircle, Pencil, Printer, Send } from "lucide-react";
 import { Badge, Button, Card, Empty, IconButton, Segmented, Spinner, Switch, errorText, useToast } from "@/components/ui";
+import { ArchiveSheet } from "@/components/ArchiveSheet";
 import { ReportSheet, fileSize } from "@/components/ReportSheet";
 import { ReportBacklog } from "@/components/ReportBacklog";
 import { DatePicker } from "@/components/DatePicker";
@@ -40,6 +41,7 @@ function Reports() {
   const [show, setShow] = useState<Show>("semua");
   const [withPhone, setWithPhone] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const today = dateKey();
   const therapist = user.role === "therapist";
   const desk = can("bookings.manage");
@@ -142,6 +144,11 @@ function Reports() {
             <Button icon={<ClipboardCopy className="size-4" />} onClick={copyList} disabled={all.length === 0}>
               Salin daftar pasien
             </Button>
+            {can("reports.archive") && (
+              <Button variant="secondary" icon={<Archive className="size-4" />} onClick={() => setArchiving(true)}>
+                Arsip
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -227,7 +234,8 @@ function Reports() {
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 pl-[4.75rem] empty:hidden md:pl-0">
                     {late && <Badge tone="amber">Belum ada laporan</Badge>}
-                    {mine && writable(b) && (
+                    {r?.archivedAt && <Badge tone="neutral">Diarsipkan</Badge>}
+                    {mine && writable(b) && !r?.archivedAt && (
                       <Button size="sm" variant={r || !due(b) ? "ghost" : "primary"} icon={r ? <Pencil className="size-3.5" /> : <FileText className="size-3.5" />} onClick={() => setEditing(b.id)}>
                         {r ? "Ubah" : "Buat laporan"}
                       </Button>
@@ -351,6 +359,7 @@ function Reports() {
         complaint={editing ? visitOf.get(editing)?.complaint : undefined}
         onClose={() => setEditing(null)}
       />
+      {can("reports.archive") && <ArchiveSheet open={archiving} onClose={() => setArchiving(false)} href={(id) => `/laporan-terapi/${id}`} />}
     </div>
   );
 }

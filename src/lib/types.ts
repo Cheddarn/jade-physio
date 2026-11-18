@@ -509,6 +509,9 @@ export interface TherapyReport {
   nextVisit?: string;
   /** The date of the next visit (YYYY-MM-DD), when one is planned. */
   nextVisitDate?: string | null;
+  /** Archived by the desk (by date range): still readable and in the patient's history, but no longer changed. */
+  archivedAt?: number | null;
+  archivedBy?: string | null;
   /** Recovery progression at this session: pain on the VAS (0-10) and the physio's estimate of recovery (0-100 %). */
   pain?: number | null;
   recovery?: number | null;

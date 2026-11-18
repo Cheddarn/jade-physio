@@ -6,6 +6,9 @@ import { Button, Field, Input, Sheet, Textarea, cx, errorText, useToast } from "
 import { ReportHistory } from "./ReportHistory";
 import { SignatureField } from "./SignatureField";
 import { NextVisitField } from "./NextVisitField";
+import { FindingsPicker } from "./FindingsPicker";
+import { PickTabs } from "./PickTabs";
+import { ADVICE, ALL_TREATMENTS, TREATMENT_GROUPS, hasPhrase, togglePhrase } from "@/lib/quickpicks";
 import { nextVisitDateFor } from "@/lib/next-visit";
 import { useUser } from "@/lib/auth";
 import { useCollection, useDoc } from "@/lib/hooks";
@@ -22,17 +25,10 @@ type Fields = Pick<TherapyReport, "customerName" | "assessment" | "treatment" | 
 export const fileSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /* One tap adds the phrase, so a report takes a minute instead of a paragraph of typing. */
-const TREATMENTS = ["TENS", "Ultrasound", "Infrared", "Manual terapi", "Mobilisasi sendi", "Stretching", "Exercise terapi", "Penguatan otot", "Dry needling", "Kinesio taping", "Traksi", "Massage"];
-const ADVICE = ["Kompres hangat 2x sehari 15 menit", "Kompres es 10 menit bila nyeri", "Latihan peregangan pagi dan sore", "Hindari angkat beban berat", "Perbaiki posisi duduk", "Istirahat cukup"];
 
-/** "TENS, Ultrasound": tapping a phrase that is already there takes it out again. */
-function toggleItem(text: string | undefined, item: string) {
-  const parts = (text ?? "").split(/,\s*|\n/).map((x) => x.trim()).filter(Boolean);
-  const has = parts.some((p) => p.toLowerCase() === item.toLowerCase());
-  return (has ? parts.filter((p) => p.toLowerCase() !== item.toLowerCase()) : [...parts, item]).join(", ");
-}
-const hasItem = (text: string | undefined, item: string) =>
-  (text ?? "").split(/,\s*|\n/).some((p) => p.trim().toLowerCase() === item.toLowerCase());
+/** "TENS, Ultrasound": tapping a phrase that is already there takes it out again; typed text is kept as it is. */
+const toggleItem = togglePhrase;
+const hasItem = hasPhrase;
 
 /** The physio's report after a session: a short write-up, with an optional file. */
 export function ReportSheet({
@@ -52,6 +48,8 @@ export function ReportSheet({
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [f, setF] = useState<Fields>({ customerName: "" });
+  // Which group of Tindakan picks is showing.
+  const [tGroup, setTGroup] = useState(TREATMENT_GROUPS[0].name);
   const [file, setFile] = useState<ReportFile | null>(null);
   const [pending, setPending] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -185,7 +183,12 @@ export function ReportSheet({
       footer={
         <div className="flex flex-col gap-3">
           {error && <p className="text-sm text-danger">{error}</p>}
-          <Button size="lg" block loading={busy} onClick={submit}>
+          {report?.archivedAt && (
+            <p className="rounded-lg bg-line-soft px-3 py-2 text-[13px] text-ink-2">
+              Laporan ini diarsipkan {shortDate(report.archivedAt)}. Kembalikan dari Arsip untuk mengubahnya.
+            </p>
+          )}
+          <Button size="lg" block loading={busy} disabled={!!report?.archivedAt} onClick={submit}>
             Simpan laporan
           </Button>
         </div>
@@ -213,10 +216,22 @@ export function ReportSheet({
 
           <HistoryFields key={openedFor ?? ""} value={f} onChange={setClinical} />
           <Field label="Pemeriksaan / temuan" htmlFor="rp-a">
-            <Textarea id="rp-a" className="min-h-16" placeholder="mis. ROM bahu kanan terbatas 120°, nyeri tekan m. trapezius" {...text("assessment")} />
+            <FindingsPicker value={f.assessment} onChange={(t) => set("assessment", t)} condition={f.condition} />
+            <Textarea id="rp-a" className="min-h-16" placeholder="Ketuk pilihan di atas, atau tulis sendiri, mis. ROM fleksi bahu 120°, nyeri tekan m. trapezius" {...text("assessment")} />
           </Field>
           <Field label="Tindakan yang diberikan" htmlFor="rp-t">
-            <Chips items={extra(TREATMENTS, own?.treatments)} value={f.treatment} onPick={(x) => set("treatment", toggleItem(f.treatment, x))} label="Tindakan" />
+            <PickTabs
+              label="Kelompok tindakan"
+              active={tGroup}
+              onChange={setTGroup}
+              tabs={TREATMENT_GROUPS.map((g) => ({ id: g.name, name: g.name, count: g.items.filter((x) => hasItem(f.treatment, x)).length }))}
+            />
+            <Chips
+              items={extra(TREATMENT_GROUPS.find((g) => g.name === tGroup)?.items ?? [], (own?.treatments ?? []).filter((x) => !ALL_TREATMENTS.some((t) => t.toLowerCase() === x.toLowerCase())))}
+              value={f.treatment}
+              onPick={(x) => set("treatment", toggleItem(f.treatment, x))}
+              label="Tindakan"
+            />
             <Textarea id="rp-t" className="min-h-16" placeholder="Ketuk pilihan di atas, atau tulis sendiri: dosis, durasi, area" {...text("treatment")} />
           </Field>
           <Field label="Saran & latihan di rumah" htmlFor="rp-s">
