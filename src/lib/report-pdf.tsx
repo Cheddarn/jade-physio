@@ -49,9 +49,12 @@ const s = StyleSheet.create({
   name: { fontSize: 16, fontWeight: 700, color: C.jadeDeep, lineHeight: 1.15 },
   address: { fontSize: 8.5, color: C.muted, marginTop: 2, maxWidth: 290 },
   title: { fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" },
-  info: { flexDirection: "row", flexWrap: "wrap", marginTop: 14 },
-  infoItem: { width: "50%", flexDirection: "row", marginBottom: 4, paddingRight: 8 },
-  infoLabel: { width: 70, color: C.muted },
+  // Larger than the body text: who, when and what is the first thing read. The right column is wider for the date.
+  info: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, fontSize: 12.5 },
+  infoItem: { flexDirection: "row", marginBottom: 6 },
+  infoLeft: { width: "44%", paddingRight: 10 },
+  infoRight: { width: "56%" },
+  infoLabel: { color: C.muted },
   infoValue: { flex: 1 },
   section: { marginTop: 13 },
   h2: { fontSize: 8.5, fontWeight: 700, color: C.jadeDeep, letterSpacing: 0.6, textTransform: "uppercase" },
@@ -246,9 +249,9 @@ function ReportDoc({
           </View>
 
           <View style={s.info}>
-            {info.map(([k, v]) => (
-              <View key={k} style={s.infoItem}>
-                <Text style={s.infoLabel}>{k}</Text>
+            {info.map(([k, v], i) => (
+              <View key={k} style={[s.infoItem, i % 2 ? s.infoRight : s.infoLeft]}>
+                <Text style={[s.infoLabel, { width: i % 2 ? 64 : 86 }]}>{k}</Text>
                 <Text style={[s.infoValue, k === "Pasien" || k === "Kondisi" ? { fontWeight: 600 } : {}]}>{v}</Text>
               </View>
             ))}

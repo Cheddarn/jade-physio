@@ -128,11 +128,12 @@ export default function ReportPrintPage() {
           <p className="shrink-0 text-sm font-bold tracking-wide uppercase sm:text-right print:text-right">Laporan fisioterapi</p>
         </header>
 
-        <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+        <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-base sm:grid-cols-[auto_1fr_auto_1fr] md:text-[17px]">
           <dt className="text-muted">Pasien</dt>
           <dd className="font-semibold">{r.customerName}</dd>
           <dt className="text-muted">Tanggal</dt>
-          <dd>
+          {/* On one line where there is room: the name beside it is shorter. */}
+          <dd className="md:whitespace-nowrap print:whitespace-nowrap">
             {longDate(r.sessionAt)}, {time(r.sessionAt)}
           </dd>
           <dt className="text-muted">Fisioterapis</dt>
