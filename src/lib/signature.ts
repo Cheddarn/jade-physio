@@ -281,10 +281,17 @@ export async function cleanSignature(file: Blob, color: InkColor = "hitam", turn
   return { dataUrl: final.toDataURL("image/png"), width: fw, height: fh };
 }
 
-/** Save (or with null, remove) a physio's signature, keeping their quick-pick phrases. */
+/**
+ * Save (or with null, remove) a physio's signature, keeping their quick-pick phrases. No read first, so it works on a
+ * patchy connection: the field is updated in place, and the document is created when the physio has none yet.
+ */
 export async function saveSignature(staffId: string, dataUrl: string | null) {
-  const cur = await store.get<ReportOptions>("reportOptions", staffId);
-  const { id: _id, ...rest } = cur ?? ({ treatments: [], advice: [], updatedAt: 0 } as ReportOptions & { id?: string });
-  void _id;
-  await store.set("reportOptions", staffId, { ...rest, signature: dataUrl, signatureAt: Date.now() });
+  const patch = { signature: dataUrl, signatureAt: Date.now() };
+  try {
+    await store.update("reportOptions", staffId, patch);
+  } catch (e) {
+    const why = `${(e as { code?: string })?.code ?? ""} ${(e as Error)?.message ?? ""}`;
+    if (!/not-found|no document|tidak ditemukan/i.test(why)) throw e;
+    await store.set("reportOptions", staffId, { treatments: [], advice: [], updatedAt: 0, ...patch } satisfies ReportOptions);
+  }
 }

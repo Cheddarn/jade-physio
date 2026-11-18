@@ -32,7 +32,13 @@ export function SignatureField({ staffId, staffName, editable }: { staffId: stri
   const [result, setResult] = useState<CleanSignature | null>(null);
   const [busy, setBusy] = useState<"read" | "save" | "remove" | null>(null);
   const [error, setError] = useState("");
-  const saved = row?.signature ?? null;
+  // What was just saved shows at once, without waiting for the database to send it back.
+  const [justSaved, setJustSaved] = useState<{ staffId: string; src: string | null } | null>(null);
+  const mine = justSaved?.staffId === staffId ? justSaved : null;
+  const fromDb = row?.signature ?? null;
+  const saved = mine && (fromDb ?? null) !== mine.src ? mine.src : fromDb;
+  // Once the database has it, it speaks for itself again.
+  if (mine && (fromDb ?? null) === mine.src) setJustSaved(null);
 
   if (!staffId || (!editable && !saved)) return null;
 
@@ -43,7 +49,13 @@ export function SignatureField({ staffId, staffName, editable }: { staffId: stri
       setResult(await cleanSignature(f, c, t));
     } catch (e) {
       setResult(null);
-      setError(e instanceof Error && e.message.startsWith("Tanda tangan") ? e.message : "Foto tidak bisa dibaca. Coba foto lain (JPG atau PNG).");
+      setError(
+        e instanceof Error && e.message.startsWith("Tanda tangan")
+          ? e.message
+          : /heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name)
+            ? "Foto HEIC belum bisa dibaca di browser. Ubah format kamera ke JPG, atau kirim fotonya ke diri sendiri lewat WhatsApp lalu pilih dari sana."
+            : "Foto tidak bisa dibaca. Coba foto lain (JPG atau PNG).",
+      );
     } finally {
       setBusy(null);
     }
@@ -53,7 +65,8 @@ export function SignatureField({ staffId, staffName, editable }: { staffId: stri
     const f = list?.[0];
     if (input.current) input.current.value = "";
     if (!f) return;
-    if (!f.type.startsWith("image/")) return setError("Pilih foto (JPG atau PNG).");
+    // Some Android pickers give no file type; let the photo itself decide.
+    if (f.type && !f.type.startsWith("image/")) return setError("Pilih foto (JPG atau PNG).");
     setPhoto(f);
     setTurns(0);
     void read(f, color, 0);
@@ -82,6 +95,7 @@ export function SignatureField({ staffId, staffName, editable }: { staffId: stri
     setBusy("save");
     try {
       await saveSignature(staffId, result.dataUrl);
+      setJustSaved({ staffId, src: result.dataUrl });
       toast("Tanda tangan disimpan");
       cancel();
     } catch (e) {
@@ -95,6 +109,7 @@ export function SignatureField({ staffId, staffName, editable }: { staffId: stri
     setBusy("remove");
     try {
       await saveSignature(staffId, null);
+      setJustSaved({ staffId, src: null });
       toast("Tanda tangan dihapus");
     } catch (e) {
       toast(errorText(e), "error");
