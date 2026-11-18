@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Check, Eraser, ShieldCheck } from "lucide-react";
 import { Button, Card, Field, Input, Spinner, errorText, useToast } from "@/components/ui";
 import { useCan, useUser } from "@/lib/auth";
-import { CLEARED, KEPT, clearData, countCleared, type Step } from "@/lib/reset";
+import { CLEARED, KEPT, clearData, countCleared, type Failure, type Step } from "@/lib/reset";
 
 /* Bersihkan data: the admin deletes the test data before the clinic starts using the system for real. */
 
@@ -19,7 +19,7 @@ export default function BersihkanDataPage() {
   const [typed, setTyped] = useState("");
   const [step, setStep] = useState<Step | null>(null);
   const [done, setDone] = useState<Record<string, number> | null>(null);
-  const [failed, setFailed] = useState<string[]>([]);
+  const [failed, setFailed] = useState<Failure[]>([]);
   const [error, setError] = useState("");
 
   const allowed = can("data.reset");
@@ -33,7 +33,8 @@ export default function BersihkanDataPage() {
   if (!allowed) return <p className="p-8 text-sm text-muted">Halaman ini khusus admin.</p>;
 
   const total = counts ? Object.values(counts).reduce((a, b) => a + Math.max(0, b), 0) : 0;
-  const ready = typed.trim().toUpperCase() === CONFIRM && !!counts && !step;
+  // Forgiving of the phone keyboard: any case, extra spaces.
+  const ready = typed.replace(/\s+/g, " ").trim().toUpperCase() === CONFIRM && !step;
 
   async function run() {
     setError("");
@@ -42,7 +43,7 @@ export default function BersihkanDataPage() {
       const { removed, failed } = await clearData(user.email.toLowerCase(), setStep);
       setDone(removed);
       setFailed(failed);
-      setCounts(await countCleared());
+      setCounts(await countCleared().catch(() => counts));
       setTyped("");
       toast(failed.length ? "Sebagian data sudah dihapus" : "Data uji coba sudah dihapus");
     } catch (e) {
@@ -63,7 +64,13 @@ export default function BersihkanDataPage() {
         <Card className="mt-5 flex items-start gap-3 border-jade/40 bg-jade-mist/50 px-4 py-3.5">
           <Check className="mt-0.5 size-5 shrink-0 text-jade" />
           <div className="text-sm">
-            <p className="font-semibold text-jade-deep">{failed.length ? "Sebagian data sudah dihapus." : "Data uji coba sudah dihapus."}</p>
+            <p className="font-semibold text-jade-deep">
+              {!CLEARED.some(({ col }) => col in done)
+                ? "Belum ada data yang terhapus."
+                : failed.length
+                  ? "Sebagian data sudah dihapus."
+                  : "Data uji coba sudah dihapus."}
+            </p>
             <p className="mt-0.5 text-ink-2">
               {CLEARED.filter(({ col }) => col in done)
                 .map(({ col, label }) => `${label} ${done[col]}`)
@@ -72,8 +79,10 @@ export default function BersihkanDataPage() {
             </p>
             {failed.length > 0 && (
               <p className="mt-1.5 text-danger">
-                Belum bisa dihapus: {failed.join(", ")}. Pasang aturan Firestore terbaru (Firebase → Firestore Database → Rules, tempel isi
-                firestore.rules, lalu Publish), kemudian jalankan Bersihkan data sekali lagi.
+                Belum bisa dihapus: {failed.map((f) => `${f.label} (${f.reason})`).join(", ")}.
+                {failed.some((f) => f.reason.includes("aturan")) &&
+                  " Pasang aturan Firestore terbaru (Firebase → Firestore Database → Rules, tempel aturannya, lalu Publish), kemudian jalankan Bersihkan data sekali lagi."}
+                {failed.some((f) => f.reason.includes("koneksi")) && " Periksa koneksi internet, lalu jalankan lagi."}
               </p>
             )}
             <Link href="/kalender" className="mt-1.5 inline-block font-semibold text-jade">
