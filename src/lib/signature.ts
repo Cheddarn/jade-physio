@@ -22,18 +22,30 @@ const OUT_H = 240;
 /** Photos are worked on at this size at most. */
 const WORK = 1400;
 
-async function loadImage(file: Blob): Promise<HTMLImageElement> {
+type Picture = { src: CanvasImageSource; width: number; height: number };
+
+/**
+ * The photo, upright (as the phone shows it). Very large photos that a phone can't open whole are opened already
+ * shrunk, straight from the file.
+ */
+async function loadImage(file: Blob): Promise<Picture> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
     img.decoding = "async";
     img.src = url;
     await img.decode();
-    return img;
+    if (img.naturalWidth && img.naturalHeight) return { src: img, width: img.naturalWidth, height: img.naturalHeight };
+  } catch {
+    /* too big to open whole, or a format the image element won't take: try again below */
   } finally {
     // The decoded image stays usable after the URL is revoked.
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
+  if (typeof createImageBitmap !== "function") throw new Error("decode");
+  // Only the width is given, so the height keeps the photo's proportions.
+  const bmp = await createImageBitmap(file, { resizeWidth: WORK, resizeQuality: "high", imageOrientation: "from-image" });
+  return { src: bmp, width: bmp.width, height: bmp.height };
 }
 
 /** Running maximum over a window of 2r+1, along rows then columns: the paper's brightness with the ink taken out. */
@@ -86,6 +98,124 @@ function boxBlur(src: Float32Array, w: number, h: number, r: number) {
   return out;
 }
 
+/**
+ * Where the sheet of paper is, when the photo shows a table around it. Worked out on the photo with the ink taken
+ * out (`bare`, the max filter): the largest bright area, pulled in from its edge past where the table meets the
+ * paper. When there's no table (a close-up, a cropped or digital signature, a shadow across the paper) it is simply
+ * the whole photo.
+ */
+function paperArea(bare: Float32Array, w: number, h: number, grown: number) {
+  const all = () => new Uint8Array(w * h).fill(1);
+  const long = Math.max(w, h);
+  const t = otsu(bare);
+  let sb = 0,
+    nb = 0,
+    sd = 0,
+    nd = 0;
+  for (const v of bare)
+    if (v > t) {
+      sb += v;
+      nb++;
+    } else {
+      sd += v;
+      nd++;
+    }
+  // No table: nothing clearly darker than the paper, or too little of it.
+  if (!nb || !nd || sb / nb - sd / nd < 45 || nd < w * h * 0.08) return all();
+
+  // The largest bright patch (4 neighbours).
+  const bright = new Uint8Array(w * h);
+  for (let i = 0; i < bright.length; i++) bright[i] = bare[i] > t ? 1 : 0;
+  const lab = new Int32Array(w * h).fill(-1);
+  let best = -1,
+    bestArea = 0;
+  const stack: number[] = [];
+  const step = (q: number, ok: (n: number) => boolean, mark: (n: number) => void) => {
+    const x = q % w;
+    for (const n of [q - w, q + w, x > 0 ? q - 1 : -1, x < w - 1 ? q + 1 : -1])
+      if (n >= 0 && n < w * h && ok(n)) {
+        mark(n);
+        stack.push(n);
+      }
+  };
+  for (let p = 0, id = 0; p < w * h; p++, id++) {
+    if (!bright[p] || lab[p] >= 0) continue;
+    let area = 0;
+    lab[p] = id;
+    stack.push(p);
+    while (stack.length) {
+      area++;
+      step(stack.pop()!, (n) => !!bright[n] && lab[n] < 0, (n) => (lab[n] = id));
+    }
+    if (area > bestArea) {
+      bestArea = area;
+      best = id;
+    }
+  }
+
+  // The table: what isn't that patch and can be reached from the photo's border (holes in the sheet stay paper).
+  const outside = new Uint8Array(w * h);
+  const seed = (i: number) => {
+    if (lab[i] !== best && !outside[i]) {
+      outside[i] = 1;
+      stack.push(i);
+    }
+  };
+  for (let x = 0; x < w; x++) {
+    seed(x);
+    seed((h - 1) * w + x);
+  }
+  for (let y = 0; y < h; y++) {
+    seed(y * w);
+    seed(y * w + w - 1);
+  }
+  while (stack.length) step(stack.pop()!, (n) => lab[n] !== best && !outside[n], (n) => (outside[n] = 1));
+  let outsideArea = 0;
+  for (const v of outside) outsideArea += v;
+  if (outsideArea < w * h * 0.08) return all();
+
+  // A real table has a sharp edge where the paper starts; a shadow fades.
+  const edges: number[] = [];
+  let seen = 0;
+  for (let y = 2; y < h - 2; y++)
+    for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x;
+      if (outside[i] || !(outside[i - 1] || outside[i + 1] || outside[i - w] || outside[i + w])) continue;
+      if (seen++ % 3) continue;
+      let m = 0;
+      for (let d = -3; d <= 3; d++) {
+        m = Math.max(m, Math.abs(bare[i + d + 1] - bare[i + d - 1]) || 0, Math.abs(bare[i + (d + 1) * w] - bare[i + (d - 1) * w]) || 0);
+      }
+      edges.push(m);
+    }
+  edges.sort((a, b) => a - b);
+  if (!edges.length || edges[edges.length >> 1] < 20) return all();
+
+  // Pulled in from the edge: the max filter grew the paper by `grown`, and a little more covers the line where the
+  // table meets the paper. Beyond the photo counts as paper.
+  const r = grown + Math.max(3, Math.round(long / 150));
+  const I = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    for (let x = 0; x < w; x++) {
+      row += outside[y * w + x] ? 0 : 1;
+      I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row;
+    }
+  }
+  const inside = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r),
+      y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r),
+        x1 = Math.min(w, x + r + 1);
+      const sum = I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0];
+      inside[y * w + x] = sum >= (y1 - y0) * (x1 - x0) - 0.5 ? 1 : 0;
+    }
+  }
+  return inside;
+}
+
 /** Otsu's threshold on 0..255 values: the split that best separates ink from paper. */
 function otsu(values: Float32Array) {
   const hist = new Float64Array(256);
@@ -115,14 +245,15 @@ function otsu(values: Float32Array) {
 }
 
 /** Connected groups of ink pixels (8 neighbours): a label per pixel, and each group's size and bounds. */
-function components(mask: Uint8Array, w: number, h: number) {
+function components(mask: Uint8Array, w: number, h: number, margin: number, paper: Uint8Array) {
   const label = new Int32Array(w * h).fill(-1);
-  const comps: { area: number; x0: number; y0: number; x1: number; y1: number; edge: boolean }[] = [];
+  // rim: pixels lying along the photo's border, where shadows, the paper's edge and the table show.
+  const comps: { area: number; x0: number; y0: number; x1: number; y1: number; edge: boolean; rim: number; onPaper: number }[] = [];
   const stack: number[] = [];
   for (let p = 0; p < w * h; p++) {
     if (!mask[p] || label[p] >= 0) continue;
     const id = comps.length;
-    const c = { area: 0, x0: w, y0: h, x1: 0, y1: 0, edge: false };
+    const c = { area: 0, x0: w, y0: h, x1: 0, y1: 0, edge: false, rim: 0, onPaper: 0 };
     label[p] = id;
     stack.push(p);
     while (stack.length) {
@@ -135,6 +266,8 @@ function components(mask: Uint8Array, w: number, h: number) {
       if (y < c.y0) c.y0 = y;
       if (y > c.y1) c.y1 = y;
       if (x <= 1 || y <= 1 || x >= w - 2 || y >= h - 2) c.edge = true;
+      if (x < margin || y < margin || x >= w - margin || y >= h - margin) c.rim++;
+      if (paper[q]) c.onPaper++;
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++) {
           const nx = x + dx,
@@ -165,9 +298,9 @@ export interface CleanSignature {
  */
 export async function cleanSignature(file: Blob, color: InkColor = "hitam", turns = 0): Promise<CleanSignature> {
   const img = await loadImage(file);
-  const scale = Math.min(1, WORK / Math.max(img.naturalWidth, img.naturalHeight));
-  const sw = Math.max(1, Math.round(img.naturalWidth * scale));
-  const sh = Math.max(1, Math.round(img.naturalHeight * scale));
+  const scale = Math.min(1, WORK / Math.max(img.width, img.height));
+  const sw = Math.max(1, Math.round(img.width * scale));
+  const sh = Math.max(1, Math.round(img.height * scale));
   const q = ((turns % 4) + 4) % 4;
   const w = q % 2 ? sh : sw;
   const h = q % 2 ? sw : sh;
@@ -175,9 +308,12 @@ export async function cleanSignature(file: Blob, color: InkColor = "hitam", turn
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  // On white, so a signature image that is already transparent reads as ink on paper.
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
   ctx.translate(w / 2, h / 2);
   ctx.rotate((q * Math.PI) / 2);
-  ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
+  ctx.drawImage(img.src, -sw / 2, -sh / 2, sw, sh);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const px = ctx.getImageData(0, 0, w, h).data;
 
@@ -189,18 +325,31 @@ export async function cleanSignature(file: Blob, color: InkColor = "hitam", turn
   // The paper's own brightness at each point (shadows and uneven light included): ink removed by a max filter wider
   // than a pen stroke, then smoothed. Ink is what is clearly darker than the paper around it.
   const long = Math.max(w, h);
-  const paper = boxBlur(maxFilter(gray, w, h, Math.max(4, Math.round(long / 90))), w, h, Math.max(6, Math.round(long / 60)));
+  const grow = Math.max(4, Math.round(long / 90));
+  const bare = maxFilter(gray, w, h, grow);
+  const paper = boxBlur(bare, w, h, Math.max(6, Math.round(long / 60)));
   const dark = new Float32Array(w * h);
   for (let i = 0; i < dark.length; i++) dark[i] = Math.max(0, paper[i] - gray[i]);
   const t = Math.min(90, Math.max(22, otsu(dark)));
 
   const mask = new Uint8Array(w * h);
   for (let i = 0; i < mask.length; i++) mask[i] = dark[i] > t ? 1 : 0;
-  const { label, comps } = components(mask, w, h);
+  const margin = Math.max(3, Math.round(Math.min(w, h) * 0.02));
+  const { label, comps } = components(mask, w, h, margin, paperArea(bare, w, h, grow));
 
-  // Strokes: the larger groups, not touching the photo's edge (a table or the paper's border). Small marks (a dot,
-  // a short stroke) stay only when they sit within or right beside the signature; specks further out are dirt.
-  const inner = comps.filter((c) => !c.edge);
+  // What touches the photo's edge is the frame, not the signature, when it runs along the border (shadow, the
+  // paper's edge) or is a big solid patch (the table): a signature cropped tight against the edge still counts.
+  // So is anything off the sheet of paper: the table, a thumb, the line where the paper meets the table.
+  const frame = comps.map(
+    (c) =>
+      c.onPaper / c.area < 0.5 ||
+      (c.edge &&
+        (c.rim / c.area > 0.4 || (c.area / ((c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1)) > 0.35 && (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1) > w * h * 0.08))),
+  );
+
+  // Strokes: the larger groups that aren't frame. Small marks (a dot, a short stroke) stay only when they sit within
+  // or right beside the signature; specks further out are dirt.
+  const inner = comps.filter((_, i) => !frame[i]);
   const largest = Math.max(0, ...inner.map((c) => c.area));
   if (!largest) throw new Error("Tanda tangan tidak terbaca. Foto lebih dekat, dengan cahaya terang dan latar kertas polos.");
   const minMain = Math.max(12, largest * 0.02);
@@ -212,7 +361,7 @@ export async function cleanSignature(file: Blob, color: InkColor = "hitam", turn
   const near = Math.hypot(x1 - x0, y1 - y0) * 0.05;
   const keep = new Uint8Array(comps.length);
   comps.forEach((c, i) => {
-    if (c.edge) return;
+    if (frame[i]) return;
     if (c.area >= minMain) keep[i] = 1;
     else if (c.area >= 4 && c.x0 >= x0 - near && c.x1 <= x1 + near && c.y0 >= y0 - near && c.y1 <= y1 + near) keep[i] = 1;
   });
@@ -278,7 +427,22 @@ export async function cleanSignature(file: Blob, color: InkColor = "hitam", turn
   fctx.imageSmoothingEnabled = true;
   fctx.imageSmoothingQuality = "high";
   fctx.drawImage(crop, 0, 0, fw, fh);
-  return { dataUrl: final.toDataURL("image/png"), width: fw, height: fh };
+  let dataUrl = final.toDataURL("image/png");
+  // Kept small (it is stored with the physio's settings): a busy photo is shrunk until it fits.
+  let sw2 = fw,
+    sh2 = fh;
+  while (dataUrl.length > 450_000 && sw2 > 240) {
+    sw2 = Math.round(sw2 * 0.75);
+    sh2 = Math.max(1, Math.round(sh2 * 0.75));
+    const smaller = document.createElement("canvas");
+    smaller.width = sw2;
+    smaller.height = sh2;
+    const sctx = smaller.getContext("2d")!;
+    sctx.imageSmoothingQuality = "high";
+    sctx.drawImage(final, 0, 0, sw2, sh2);
+    dataUrl = smaller.toDataURL("image/png");
+  }
+  return { dataUrl, width: sw2, height: sh2 };
 }
 
 /**
