@@ -19,6 +19,7 @@ export default function BersihkanDataPage() {
   const [typed, setTyped] = useState("");
   const [step, setStep] = useState<Step | null>(null);
   const [done, setDone] = useState<Record<string, number> | null>(null);
+  const [failed, setFailed] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   const allowed = can("data.reset");
@@ -38,11 +39,12 @@ export default function BersihkanDataPage() {
     setError("");
     setStep({ label: "Memulai", done: 0, total: 0 });
     try {
-      const removed = await clearData(user.email.toLowerCase(), setStep);
+      const { removed, failed } = await clearData(user.email.toLowerCase(), setStep);
       setDone(removed);
+      setFailed(failed);
       setCounts(await countCleared());
       setTyped("");
-      toast("Data uji coba sudah dihapus");
+      toast(failed.length ? "Sebagian data sudah dihapus" : "Data uji coba sudah dihapus");
     } catch (e) {
       setError(
         `${errorText(e)} Bila ini soal izin, pastikan aturan Firestore terbaru (firestore.rules) sudah dipasang di Firebase, lalu coba lagi. Data yang sudah terhapus tetap terhapus.`,
@@ -61,11 +63,19 @@ export default function BersihkanDataPage() {
         <Card className="mt-5 flex items-start gap-3 border-jade/40 bg-jade-mist/50 px-4 py-3.5">
           <Check className="mt-0.5 size-5 shrink-0 text-jade" />
           <div className="text-sm">
-            <p className="font-semibold text-jade-deep">Data uji coba sudah dihapus.</p>
+            <p className="font-semibold text-jade-deep">{failed.length ? "Sebagian data sudah dihapus." : "Data uji coba sudah dihapus."}</p>
             <p className="mt-0.5 text-ink-2">
-              {CLEARED.map(({ col, label }) => `${label} ${done[col] ?? 0}`).join(", ")}
+              {CLEARED.filter(({ col }) => col in done)
+                .map(({ col, label }) => `${label} ${done[col]}`)
+                .join(", ")}
               {done.files ? `, file laporan ${done.files}` : ""}.
             </p>
+            {failed.length > 0 && (
+              <p className="mt-1.5 text-danger">
+                Belum bisa dihapus: {failed.join(", ")}. Pasang aturan Firestore terbaru (Firebase → Firestore Database → Rules, tempel isi
+                firestore.rules, lalu Publish), kemudian jalankan Bersihkan data sekali lagi.
+              </p>
+            )}
             <Link href="/kalender" className="mt-1.5 inline-block font-semibold text-jade">
               Ke kalender
             </Link>

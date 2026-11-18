@@ -80,16 +80,31 @@ async function removeReportFiles() {
 
 export type Step = { label: string; done: number; total: number };
 
-/** Delete the test data. `by` is the admin's sign-in, who opens the reset window. */
-export async function clearData(by: string, onStep: (s: Step) => void): Promise<Record<string, number>> {
+/**
+ * Delete the test data. `by` is the admin's sign-in, who opens the reset window. Each kind of record is deleted on its
+ * own: if the Firestore rules for the reset window aren't published yet, patients, bookings, reports and the rest an
+ * admin may always delete still go, and the ones that need the window are reported in `failed`.
+ */
+export async function clearData(by: string, onStep: (s: Step) => void): Promise<{ removed: Record<string, number>; failed: string[] }> {
   const removed: Record<string, number> = {};
-  await store.set("meta", "reset", { by, until: Date.now() + 20 * 60_000, startedAt: Date.now() });
+  const failed: string[] = [];
+  let windowOpen = false;
+  try {
+    await store.set("meta", "reset", { by, until: Date.now() + 20 * 60_000, startedAt: Date.now() });
+    windowOpen = true;
+  } catch {
+    /* rules not published yet: carry on with what an admin may delete anyway */
+  }
   try {
     // Public receipt links hang off the sales.
-    const sales = await store.list<Sale>("sales");
-    const tokens = sales.map((s) => s.receiptToken).filter((t): t is string => !!t);
-    onStep({ label: "Tautan struk", done: 0, total: tokens.length });
-    await removeAll("receipts", tokens, (d) => onStep({ label: "Tautan struk", done: d, total: tokens.length }));
+    try {
+      const sales = await store.list<Sale>("sales");
+      const tokens = sales.map((s) => s.receiptToken).filter((t): t is string => !!t);
+      onStep({ label: "Tautan struk", done: 0, total: tokens.length });
+      await removeAll("receipts", tokens, (d) => onStep({ label: "Tautan struk", done: d, total: tokens.length }));
+    } catch {
+      failed.push("Tautan struk");
+    }
 
     onStep({ label: "File laporan", done: 0, total: 0 });
     try {
@@ -99,10 +114,14 @@ export async function clearData(by: string, onStep: (s: Step) => void): Promise<
     }
 
     for (const { col, label } of CLEARED) {
-      const ids = (await store.list(col)).map((d) => d.id);
-      onStep({ label, done: 0, total: ids.length });
-      await removeAll(col, ids, (d) => onStep({ label, done: d, total: ids.length }));
-      removed[col] = ids.length;
+      try {
+        const ids = (await store.list(col)).map((d) => d.id);
+        onStep({ label, done: 0, total: ids.length });
+        await removeAll(col, ids, (d) => onStep({ label, done: d, total: ids.length }));
+        removed[col] = ids.length;
+      } catch {
+        failed.push(label);
+      }
     }
 
     // Invoice numbers start again from 1.
@@ -112,7 +131,7 @@ export async function clearData(by: string, onStep: (s: Step) => void): Promise<
       /* none yet */
     }
   } finally {
-    await store.remove("meta", "reset").catch(() => {});
+    if (windowOpen) await store.remove("meta", "reset").catch(() => {});
   }
-  return removed;
+  return { removed, failed };
 }
