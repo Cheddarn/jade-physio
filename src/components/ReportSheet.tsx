@@ -238,7 +238,7 @@ export function ReportSheet({
             <Chips items={extra(ADVICE, own?.advice)} value={f.advice} onPick={(x) => set("advice", toggleItem(f.advice, x))} label="Saran" />
             <Textarea id="rp-s" className="min-h-16" {...text("advice")} />
           </Field>
-          <ProgressFields value={f} onChange={setClinical} last={lastSame} otherCases={earlier.length > 0 && !lastSame} />
+          <ProgressFields value={f} onChange={setClinical} last={lastSame} otherCases={earlier.length > 0 && !lastSame} isNew={!report} />
           <NextVisitField value={f} onChange={(p) => setF((x) => ({ ...x, ...p }))} sessionDay={booking.dateKey} />
 
           <Field label="File laporan (opsional)" hint={`PDF, JPG, atau PNG, maks ${MAX_REPORT_MB} MB. Tanpa file, sistem membuat PDF dari isian di atas.`}>

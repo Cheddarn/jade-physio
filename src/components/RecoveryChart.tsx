@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cx } from "./ui";
 import { TrendBadge } from "./ClinicalFields";
 import { dayMonth, shortDate } from "@/lib/format";
-import { caseLabel, caseOf, caseSessions, casesOf, trend } from "@/lib/progress";
+import { MEASURES, caseLabel, caseOf, caseSessions, casesOf, measuresIn, trend, type Measure } from "@/lib/progress";
 import type { TherapyReport } from "@/lib/types";
 
 /*
@@ -19,6 +19,11 @@ const GRID = "#e6e8eb";
 const MUTED = "#6b7280";
 
 type Point = Pick<TherapyReport, "pain" | "recovery" | "sessionAt" | "staffName" | "condition"> & { id?: string };
+
+const MEASURE = {
+  pain: { title: "Nyeri (VAS 0–10, makin rendah makin baik)", column: "Nyeri", max: 10, unit: (v: number) => `${v}`, cell: (v: number) => `${v}/10` },
+  recovery: { title: "Pemulihan (makin tinggi makin baik)", column: "Pemulihan", max: 100, unit: (v: number) => `${v}%`, cell: (v: number) => `${v}%` },
+} as const;
 
 function Chart({
   title,
@@ -123,6 +128,7 @@ export function RecoveryProgress({
   condition,
   upTo,
   current,
+  measures,
   table = true,
   className,
 }: {
@@ -132,12 +138,15 @@ export function RecoveryProgress({
   /** Only sessions up to this time (a printed report shows its history, not later sessions). */
   upTo?: number;
   current?: number;
+  /** The measures to show: a report shows the ones it records. By default, those recorded in any session. */
+  measures?: Measure[];
   table?: boolean;
   className?: string;
 }) {
   const k = caseOf({ condition });
-  const points = caseSessions(reports, condition, upTo);
-  if (!points.length) return null;
+  const points = caseSessions(reports, condition, upTo, measures ?? MEASURES);
+  const shown = measures ?? measuresIn(points);
+  if (!points.length || !shown.length) return null;
   const now = points[points.length - 1];
   const t = trend(now, points[points.length - 2]);
   const first = points[0];
@@ -163,8 +172,9 @@ export function RecoveryProgress({
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
-        <Chart title="Nyeri (VAS 0–10, makin rendah makin baik)" points={points} pick={(p) => p.pain} max={10} unit={(v) => `${v}`} current={current} />
-        <Chart title="Pemulihan (makin tinggi makin baik)" points={points} pick={(p) => p.recovery} max={100} unit={(v) => `${v}%`} current={current} />
+        {shown.map((m) => (
+          <Chart key={m} title={MEASURE[m].title} points={points} pick={(p) => p[m]} max={MEASURE[m].max} unit={MEASURE[m].unit} current={current} />
+        ))}
       </div>
       {table && (
         <div className="overflow-x-auto">
@@ -174,8 +184,11 @@ export function RecoveryProgress({
               <tr className="border-b border-line text-muted">
                 <th className="py-1.5 pr-3 font-semibold">Sesi</th>
                 <th className="py-1.5 pr-3 font-semibold">Tanggal</th>
-                <th className="py-1.5 pr-3 text-right font-semibold">Nyeri</th>
-                <th className="py-1.5 pr-3 text-right font-semibold">Pemulihan</th>
+                {shown.map((m) => (
+                  <th key={m} className="py-1.5 pr-3 text-right font-semibold">
+                    {MEASURE[m].column}
+                  </th>
+                ))}
                 <th className="hidden py-1.5 font-semibold sm:table-cell print:table-cell">Catatan</th>
               </tr>
             </thead>
@@ -188,13 +201,19 @@ export function RecoveryProgress({
                   <tr className="align-top">
                     <td className="tnum py-1.5 pr-3">{i + 1}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap">{shortDate(p.sessionAt)}</td>
-                    <td className="tnum py-1.5 pr-3 text-right">{p.pain != null ? `${p.pain}/10` : "-"}</td>
-                    <td className="tnum py-1.5 pr-3 text-right">{p.recovery != null ? `${p.recovery}%` : "-"}</td>
+                    {shown.map((m) => {
+                      const v = p[m];
+                      return (
+                        <td key={m} className="tnum py-1.5 pr-3 text-right">
+                          {v != null ? MEASURE[m].cell(v) : "-"}
+                        </td>
+                      );
+                    })}
                     <td className="hidden py-1.5 font-normal text-muted sm:table-cell print:table-cell">{note}</td>
                   </tr>
                   {note && (
                     <tr className="sm:hidden print:hidden">
-                      <td colSpan={4} className="pb-1.5 text-[12.5px] leading-snug font-normal text-muted">
+                      <td colSpan={2 + shown.length} className="pb-1.5 text-[12.5px] leading-snug font-normal text-muted">
                         {note}
                       </td>
                     </tr>

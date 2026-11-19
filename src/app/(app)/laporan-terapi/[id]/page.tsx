@@ -9,7 +9,7 @@ import { SignatureField } from "@/components/SignatureField";
 import { useUser } from "@/lib/auth";
 import { useCollection, useDoc } from "@/lib/hooks";
 import { RecoveryProgress } from "@/components/RecoveryChart";
-import { hasProgress, progressText } from "@/lib/progress";
+import { hasProgress, measuresOf, progressText } from "@/lib/progress";
 import { BUSINESS, longDate, shortDate, time } from "@/lib/format";
 import type { ReportOptions, TherapyReport } from "@/lib/types";
 import { toBlobUrl } from "@/lib/reports";
@@ -160,7 +160,7 @@ export default function ReportPrintPage() {
               <h2 className="text-[13px] font-bold tracking-wide text-jade-deep uppercase">Progres pemulihan</h2>
               {hasProgress(r) && <p className="mt-1 text-[15px]">{progressText(r).replace(/^./, (x) => x.toUpperCase())}</p>}
               {r.progressNote?.trim() && <p className="mt-1 text-[15px] whitespace-pre-line">{r.progressNote}</p>}
-              <RecoveryProgress className="mt-3" reports={sessions} condition={r.condition} upTo={r.sessionAt} current={r.sessionAt} />
+              <RecoveryProgress className="mt-3" reports={sessions} condition={r.condition} upTo={r.sessionAt} current={r.sessionAt} measures={measuresOf(r)} />
             </section>
           )}
           {(r.nextVisit?.trim() || r.nextVisitDate) && (

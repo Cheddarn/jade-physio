@@ -4,7 +4,7 @@ import { useState } from "react";
 import { BookOpen, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
 import { Field, Input, Textarea, cx } from "./ui";
 import { conditionByName, matchCondition, searchConditions, type Condition } from "@/lib/conditions";
-import { caseLabel, caseOf, progressText, trend } from "@/lib/progress";
+import { caseLabel, caseOf, hasProgress, progressText, trend, type Measure } from "@/lib/progress";
 import { shortDate } from "@/lib/format";
 import type { TherapyReport } from "@/lib/types";
 
@@ -170,15 +170,36 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
   );
 }
 
+/* Which measures a physio includes on a new report, remembered on this device: one who never measures recovery
+   turns it off once. Only a convenience; the reports themselves say what each one includes. */
+const INCLUDE_KEY = "jade-progress-include";
+function rememberedInclude(): Record<Measure, boolean> {
+  try {
+    const v = JSON.parse(localStorage.getItem(INCLUDE_KEY) ?? "null");
+    return { pain: v?.pain !== false, recovery: v?.recovery !== false };
+  } catch {
+    return { pain: true, recovery: true };
+  }
+}
+function rememberInclude(m: Measure, on: boolean) {
+  try {
+    localStorage.setItem(INCLUDE_KEY, JSON.stringify({ ...rememberedInclude(), [m]: on }));
+  } catch {
+    // Private mode or storage blocked: the switch still works for this report.
+  }
+}
+
 /**
  * Progres pemulihan: pain on the VAS and recovery %, plus a note, compared with the previous session of the same
  * condition. Another condition's sessions are not compared: a new condition starts its own line.
+ * Each measure can be left out of the report with its switch.
  */
 export function ProgressFields({
   value,
   onChange,
   last,
   otherCases,
+  isNew = false,
 }: {
   value: Clinical;
   onChange: (patch: Partial<Clinical>) => void;
@@ -186,7 +207,20 @@ export function ProgressFields({
   last?: Pick<TherapyReport, "pain" | "recovery" | "sessionAt"> | null;
   /** The patient has earlier reports, but only for other conditions. */
   otherCases?: boolean;
+  /** A report being written now, not one being changed: its switches start from the previous session of the case,
+   *  or from this device's last choice. */
+  isNew?: boolean;
 }) {
+  const [chosen, setChosen] = useState<Partial<Record<Measure, boolean>>>({});
+  const [remembered] = useState(rememberedInclude);
+  const on = (m: Measure) => chosen[m] ?? (value[m] != null || (isNew && (last && hasProgress(last) ? last[m] != null : remembered[m])));
+  function include(m: Measure, yes: boolean) {
+    setChosen((c) => ({ ...c, [m]: yes }));
+    // Left out means not on the report: a value picked before goes.
+    if (!yes && value[m] != null) onChange({ [m]: null });
+    rememberInclude(m, yes);
+  }
+  const any = on("pain") || on("recovery");
   const t = trend(value, last);
   const before = last ? progressText(last) : "";
   const label = caseLabel(caseOf(value));
@@ -200,6 +234,8 @@ export function ProgressFields({
           value={value.pain}
           format={(v) => String(v)}
           onPick={(v) => onChange({ pain: v })}
+          included={on("pain")}
+          onInclude={(yes) => include("pain", yes)}
         />
         <Scale
           label="Perkiraan pemulihan"
@@ -208,8 +244,10 @@ export function ProgressFields({
           value={value.recovery}
           format={(v) => `${v}%`}
           onPick={(v) => onChange({ recovery: v })}
+          included={on("recovery")}
+          onInclude={(yes) => include("recovery", yes)}
         />
-        {(before || t) && (
+        {any && (before || t) && (
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
             {before && (
               <span className="text-muted">
@@ -246,6 +284,8 @@ function Scale({
   value,
   format,
   onPick,
+  included,
+  onInclude,
 }: {
   label: string;
   hint: string;
@@ -253,32 +293,60 @@ function Scale({
   value?: number | null;
   format: (v: number) => string;
   onPick: (v: number | null) => void;
+  /** Shown on the report. Off: the scale folds away and the report leaves this measure out. */
+  included: boolean;
+  onInclude: (on: boolean) => void;
 }) {
   return (
     <div>
-      <p className="text-[13px]">
-        <span className="font-semibold text-ink-2">{label}</span> <span className="text-muted">({hint})</span>
-      </p>
-      <div role="group" aria-label={label} className="mt-1.5 flex flex-wrap gap-1">
-        {values.map((v) => {
-          const on = value === v;
-          return (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={on}
-              // Tapping the chosen value again clears it.
-              onClick={() => onPick(on ? null : v)}
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 pt-0.5 text-[13px]">
+          <span className={cx("font-semibold", included ? "text-ink-2" : "text-muted")}>{label}</span>{" "}
+          <span className="text-muted">({hint})</span>
+        </p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={included}
+          aria-label={`Cantumkan ${label} di laporan`}
+          onClick={() => onInclude(!included)}
+          className="flex shrink-0 items-center gap-2 rounded-lg py-0.5 text-[12.5px] font-semibold text-ink-2"
+        >
+          Cantumkan
+          <span className={cx("relative h-5 w-9 rounded-full transition-colors", included ? "bg-jade" : "bg-line")}>
+            <span
               className={cx(
-                "tnum h-8 min-w-9 rounded-lg border px-2 text-[13px] font-semibold transition-colors",
-                on ? "border-jade bg-jade text-white" : "border-line text-ink-2 hover:border-ink-2/40",
+                "absolute top-0.5 left-0 size-4 rounded-full bg-white shadow transition-transform",
+                included ? "translate-x-[18px]" : "translate-x-0.5",
               )}
-            >
-              {format(v)}
-            </button>
-          );
-        })}
+            />
+          </span>
+        </button>
       </div>
+      {!included ? (
+        <p className="mt-1 text-[13px] text-muted">Tidak dicantumkan di laporan.</p>
+      ) : (
+        <div role="group" aria-label={label} className="mt-1.5 flex flex-wrap gap-1">
+          {values.map((v) => {
+            const on = value === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={on}
+                // Tapping the chosen value again clears it.
+                onClick={() => onPick(on ? null : v)}
+                className={cx(
+                  "tnum h-8 min-w-9 rounded-lg border px-2 text-[13px] font-semibold transition-colors",
+                  on ? "border-jade bg-jade text-white" : "border-line text-ink-2 hover:border-ink-2/40",
+                )}
+              >
+                {format(v)}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

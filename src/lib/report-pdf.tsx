@@ -1,6 +1,6 @@
 import { Document, Font, Image, Page, Path, Circle, Line, Svg, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import { BUSINESS, dayMonth, longDate, shortDate, time } from "./format";
-import { caseSessions, hasProgress, progressText, trend, type Trend } from "./progress";
+import { caseSessions, hasProgress, measuresOf, progressText, trend, type Measure, type Trend } from "./progress";
 import type { TherapyReport } from "./types";
 
 /*
@@ -145,8 +145,16 @@ function Badge({ t }: { t: Trend }) {
   );
 }
 
+const MEASURE: Record<Measure, { title: string; column: string; width: number; max: number; unit: (v: number) => string; cell: (v: number) => string }> = {
+  pain: { title: "Nyeri (VAS 0–10, makin rendah makin baik)", column: "Nyeri", width: 48, max: 10, unit: (v) => `${v}`, cell: (v) => `${v}/10` },
+  recovery: { title: "Pemulihan (makin tinggi makin baik)", column: "Pemulihan", width: 62, max: 100, unit: (v) => `${v}%`, cell: (v) => `${v}%` },
+};
+
+/** Only the measures this report records: one left out has no chart and no column. */
 function Progress({ r, sessions }: { r: TherapyReport; sessions: Session[] }) {
-  const points = caseSessions(sessions, r.condition, r.sessionAt);
+  const shown = measuresOf(r);
+  const points = caseSessions(sessions, r.condition, r.sessionAt, shown);
+  const col = (m: Measure, i: number) => ({ width: MEASURE[m].width, textAlign: "right" as const, marginRight: i === shown.length - 1 ? 12 : 0 });
   const now = points[points.length - 1];
   const t = now ? trend(now, points[points.length - 2]) : null;
   const span = points.length > 2 ? trend(now, points[0]) : null;
@@ -173,23 +181,33 @@ function Progress({ r, sessions }: { r: TherapyReport; sessions: Session[] }) {
       {points.length > 0 && (
         <View wrap={false}>
           <View style={s.charts}>
-            <Chart title="Nyeri (VAS 0–10, makin rendah makin baik)" points={points} pick={(p) => p.pain} max={10} unit={(v) => `${v}`} current={r.sessionAt} />
-            <Chart title="Pemulihan (makin tinggi makin baik)" points={points} pick={(p) => p.recovery} max={100} unit={(v) => `${v}%`} current={r.sessionAt} />
+            {shown.map((m) => (
+              <Chart key={m} title={MEASURE[m].title} points={points} pick={(p) => p[m]} max={MEASURE[m].max} unit={MEASURE[m].unit} current={r.sessionAt} />
+            ))}
           </View>
           <View style={s.table}>
             <View style={[s.tr, s.th]}>
               <Text style={{ width: 30 }}>Sesi</Text>
               <Text style={{ width: 78 }}>Tanggal</Text>
-              <Text style={{ width: 48, textAlign: "right" }}>Nyeri</Text>
-              <Text style={{ width: 62, textAlign: "right", marginRight: 12 }}>Pemulihan</Text>
+              {shown.map((m, i) => (
+                <Text key={m} style={col(m, i)}>
+                  {MEASURE[m].column}
+                </Text>
+              ))}
               <Text style={{ flex: 1 }}>Catatan</Text>
             </View>
             {points.map((p, i) => (
               <View key={p.sessionAt} style={[s.tr, p.sessionAt === r.sessionAt ? { fontWeight: 700 } : {}]} wrap={false}>
                 <Text style={{ width: 30 }}>{i + 1}</Text>
                 <Text style={{ width: 78 }}>{shortDate(p.sessionAt)}</Text>
-                <Text style={{ width: 48, textAlign: "right" }}>{p.pain != null ? `${p.pain}/10` : "-"}</Text>
-                <Text style={{ width: 62, textAlign: "right", marginRight: 12 }}>{p.recovery != null ? `${p.recovery}%` : "-"}</Text>
+                {shown.map((m, i) => {
+                  const v = p[m];
+                  return (
+                    <Text key={m} style={col(m, i)}>
+                      {v != null ? MEASURE[m].cell(v) : "-"}
+                    </Text>
+                  );
+                })}
                 <Text style={{ flex: 1, color: C.muted, fontWeight: 400 }}>{p.progressNote || p.staffName}</Text>
               </View>
             ))}

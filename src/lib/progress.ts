@@ -6,6 +6,15 @@ export type Progress = Pick<TherapyReport, "pain" | "recovery">;
 
 export const hasProgress = (r: Progress) => r.pain != null || r.recovery != null;
 
+/* Each measure is optional: a report shows only the ones it records, in its summary, its charts and its table.
+   A physio who does not measure recovery leaves it out, and the report has no empty recovery chart or column. */
+export type Measure = "pain" | "recovery";
+export const MEASURES: Measure[] = ["pain", "recovery"];
+/** The measures this report records. */
+export const measuresOf = (r: Progress): Measure[] => MEASURES.filter((m) => r[m] != null);
+/** The measures recorded in any of these sessions. */
+export const measuresIn = (rs: Progress[]): Measure[] => MEASURES.filter((m) => rs.some((r) => r[m] != null));
+
 export interface Trend {
   tone: "good" | "same" | "bad";
   label: "Membaik" | "Stabil" | "Memburuk";
@@ -62,16 +71,17 @@ export function casesOf<T extends Pick<TherapyReport, "condition" | "sessionAt" 
   return [...latest].sort((a, b) => b[1].at - a[1].at).map(([c, v]) => ({ condition: c, sessions: v.n }));
 }
 
-/** The sessions charted for one case: those with progress, up to a session (a report shows its history, not later
- *  sessions), oldest first, the last twelve. */
+/** The sessions charted for one case: those with progress (in one of `measures`), up to a session (a report shows
+ *  its history, not later sessions), oldest first, the last twelve. */
 export function caseSessions<T extends Pick<TherapyReport, "condition" | "sessionAt" | "pain" | "recovery">>(
   reports: T[],
   condition: string | null | undefined,
   upTo?: number,
+  measures: Measure[] = MEASURES,
 ): T[] {
   const k = caseOf({ condition });
   return reports
-    .filter((r) => hasProgress(r) && caseOf(r) === k && (upTo == null || r.sessionAt <= upTo))
+    .filter((r) => measures.some((m) => r[m] != null) && caseOf(r) === k && (upTo == null || r.sessionAt <= upTo))
     .sort((a, b) => a.sessionAt - b.sessionAt)
     .slice(-12);
 }
