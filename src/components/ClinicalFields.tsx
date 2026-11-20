@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
 import { Field, Input, Textarea, cx } from "./ui";
-import { conditionByName, matchCondition, searchConditions, type Condition } from "@/lib/conditions";
+import { conditionByName, conditionIdeas, matchCondition, searchConditions, type Condition } from "@/lib/conditions";
 import { caseLabel, caseOf, hasProgress, progressText, trend, type Measure } from "@/lib/progress";
 import { shortDate } from "@/lib/format";
 import type { TherapyReport } from "@/lib/types";
@@ -11,6 +11,9 @@ import type { TherapyReport } from "@/lib/types";
 /* The clinical parts of the report form, shared by both apps' forms (same file in jade-physio and jade-report). */
 
 export type Clinical = Pick<TherapyReport, "complaint" | "condition" | "anamnesis" | "mechanism" | "pain" | "recovery" | "progressNote">;
+
+/** A complaint is written but the mechanism of injury is not: the physio is warned (filling it is one tap away). */
+export const noMechanism = (v: Pick<Clinical, "complaint" | "mechanism">) => !!v.complaint?.trim() && !v.mechanism?.trim();
 
 /** The mechanism text is still the library's (or empty): it may be replaced when the condition changes. */
 const untouched = (mechanism: string | undefined, c: Condition | null) => !mechanism?.trim() || (!!c && mechanism.trim() === c.mechanism);
@@ -25,9 +28,15 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
   const [picked, setPicked] = useState(() => !!value.condition && matchCondition(value.complaint)?.name !== value.condition);
   const [searching, setSearching] = useState(false);
   const [q, setQ] = useState("");
+  // The warning waits until the physio stops typing the complaint, so it does not flash up with the first letter.
+  const [typing, setTyping] = useState(false);
   const current = conditionByName(value.condition);
-  const suggestions = !current && !searching ? searchConditions(value.complaint ?? "", 4) : [];
-  const found = searching ? searchConditions(q, 8) : [];
+  // From what is typed: the cases it may be. With no case yet, to pick one; with one found by itself, the others it
+  // may also be (the physio decides, not the library).
+  const ideas = searching ? [] : conditionIdeas(value.complaint ?? "", 6);
+  const suggestions = !current ? ideas.slice(0, 5) : [];
+  const others = current && !picked ? ideas.filter((c) => c.name !== current.name).slice(0, 4) : [];
+  const found = searching ? searchConditions(q, 12) : [];
 
   function setComplaint(text: string) {
     const patch: Partial<Clinical> = { complaint: text };
@@ -64,7 +73,14 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
   return (
     <>
       <Field label="Keluhan" htmlFor="rp-c" hint="Ketik keluhan atau diagnosis, mis. Cervical pain, nyeri leher, tennis elbow.">
-        <Textarea id="rp-c" className="min-h-14" value={value.complaint ?? ""} onChange={(e) => setComplaint(e.target.value)} />
+        <Textarea
+          id="rp-c"
+          className="min-h-14"
+          value={value.complaint ?? ""}
+          onChange={(e) => setComplaint(e.target.value)}
+          onFocus={() => setTyping(true)}
+          onBlur={() => setTyping(false)}
+        />
         {current && !searching && (
           <span className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-jade-mist px-3 py-1 font-semibold text-jade-deep">
@@ -80,9 +96,26 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
             </button>
           </span>
         )}
+        {others.length > 0 && (
+          <span className="flex flex-col gap-1.5">
+            <span className="text-[12px] text-muted">Diagnosis lain yang mungkin dari keluhan ini:</span>
+            <span role="group" aria-label="Diagnosis lain yang mungkin" className="flex flex-wrap gap-1.5">
+              {others.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => pick(c)}
+                  className="h-8 rounded-full border border-dashed border-line px-3 text-[13px] font-semibold text-ink-2 hover:border-jade/50 hover:bg-jade-mist/40"
+                >
+                  {c.name}
+                </button>
+              ))}
+            </span>
+          </span>
+        )}
         {suggestions.length > 0 && (
           <span className="flex flex-col gap-1.5">
-            <span className="text-[12px] text-muted">Kondisi dari pustaka, ketuk untuk mengisi mekanisme cedera:</span>
+            <span className="text-[12px] text-muted">Diagnosis yang mungkin dari keluhan, ketuk untuk memilih dan mengisi mekanisme cedera:</span>
             <span role="group" aria-label="Kondisi yang mungkin" className="flex flex-wrap gap-1.5">
               {suggestions.map((c) => (
                 <button
@@ -134,6 +167,19 @@ export function HistoryFields({ value, onChange }: { value: Clinical; onChange: 
               </span>
             )}
             {q.trim().length >= 2 && !found.length && <span className="text-[13px] text-muted">Tidak ada di pustaka. Tulis mekanisme cedera sendiri di bawah.</span>}
+          </span>
+        )}
+        {noMechanism(value) && !typing && !searching && (
+          <span role="note" className="flex items-start gap-2 rounded-lg bg-amber-mist px-3 py-2 text-[13px] text-amber">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <span className="font-semibold">Mekanisme cedera belum terisi.</span>{" "}
+              {current
+                ? `Ketuk "Pakai teks pustaka ${current.name}" di bawah, atau tulis sendiri.`
+                : suggestions.length
+                  ? "Ketuk kondisi yang sesuai di atas agar terisi otomatis, atau tulis sendiri di bawah."
+                  : "Cari kondisi di pustaka agar terisi otomatis, atau tulis sendiri di bawah."}
+            </span>
           </span>
         )}
       </Field>

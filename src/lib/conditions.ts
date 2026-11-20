@@ -13,6 +13,9 @@ export interface Condition {
   keywords: string[];
   /** The usual mechanism of injury, as a starting point. */
   mechanism: string;
+  /** A general case by body area ("Knee Pain"): picked from a complaint only when nothing more specific is in it,
+   *  and listed first when searching. */
+  general?: boolean;
   /** Spine level ("L4-L5") to the case for that level: "HNP" with "L4/L5" in the complaint becomes "HNP L4-L5". */
   levels?: Record<string, string>;
 }
@@ -36,6 +39,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Cervical Pain",
     region: "Leher",
+    general: true,
     keywords: ["cervical pain", "neck pain", "nyeri leher", "sakit leher", "leher kaku", "leher tegang", "tengeng", "salah bantal", "kaku leher"],
     mechanism:
       "Postur leher menunduk atau maju dalam waktu lama (gawai, laptop, menyetir), posisi tidur yang salah, atau stres membuat otot leher dan bahu atas tegang terus-menerus sehingga timbul spasme dan nyeri.",
@@ -72,7 +76,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Frozen Shoulder",
     region: "Bahu",
-    keywords: ["frozen shoulder", "adhesive capsulitis", "bahu beku", "bahu kaku", "susah angkat tangan", "tidak bisa angkat tangan"],
+    keywords: ["frozen shoulder", "frozen", "adhesive capsulitis", "bahu beku", "bahu kaku", "susah angkat tangan", "tidak bisa angkat tangan"],
     mechanism:
       "Kapsul sendi bahu meradang lalu menebal dan mengerut, sering setelah bahu jarang digerakkan (cedera, operasi) atau pada penderita diabetes, sehingga gerak bahu makin terbatas ke semua arah.",
   },
@@ -142,6 +146,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Low Back Pain",
     region: "Punggung bawah",
+    general: true,
     keywords: ["low back pain", "lbp", "nyeri punggung bawah", "nyeri pinggang", "sakit pinggang", "pinggang kaku", "encok", "boyok"],
     mechanism:
       "Mengangkat beban dengan punggung membungkuk, duduk lama dengan postur buruk, gerakan memutar mendadak, atau otot inti yang lemah membebani otot, ligamen, dan sendi punggung bawah sehingga timbul spasme dan nyeri.",
@@ -157,7 +162,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Sciatica",
     region: "Punggung bawah",
-    keywords: ["sciatica", "siatika", "skiatika", "nyeri menjalar ke kaki", "nyeri pantat ke kaki", "saraf sciatic"],
+    keywords: ["sciatica", "siatika", "skiatika", "nyeri menjalar ke kaki", "menjalar ke kaki", "menjalar ke tungkai", "nyeri pinggang menjalar", "nyeri pantat ke kaki", "saraf sciatic"],
     mechanism:
       "Iritasi atau penekanan saraf sciatic, umumnya oleh HNP lumbal, penyempitan kanal, atau otot piriformis yang tegang, menimbulkan nyeri menjalar dari pinggang/bokong ke tungkai.",
   },
@@ -170,6 +175,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Thoracic Back Pain",
     region: "Punggung atas",
+    general: true,
     keywords: ["thoracic pain", "nyeri punggung atas", "punggung atas", "nyeri belikat", "sela belikat"],
     mechanism: "Duduk membungkuk lama di depan komputer dan kurang gerak membuat sendi punggung atas kaku serta otot di sekitar belikat tegang.",
   },
@@ -183,7 +189,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Postural Syndrome",
     region: "Punggung",
-    keywords: ["postural", "postur buruk", "kifosis", "kyphosis", "bungkuk", "forward head", "upper crossed"],
+    keywords: ["postural", "postur buruk",  "forward head", "upper crossed"],
     mechanism: "Kebiasaan postur membungkuk dan kepala maju saat duduk, bekerja, atau bermain gawai dalam waktu lama membebani jaringan lunak tulang belakang secara terus-menerus.",
   },
   // ---------- Panggul ----------
@@ -209,14 +215,14 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Knee Osteoarthritis",
     region: "Lutut",
-    keywords: ["knee osteoarthritis", "oa genu", "oa lutut", "pengapuran lutut", "lutut nyeri naik tangga", "lutut bunyi", "osteoarthritis"],
+    keywords: ["knee osteoarthritis", "osteoarthritis knee", "osteoarthritis genu", "osteoarthritis lutut", "osteoartritis lutut", "knee oa", "oa knee", "oa genu", "oa lutut", "pengapuran lutut", "lutut nyeri naik tangga", "lutut bunyi"],
     mechanism:
       "Degenerasi tulang rawan sendi lutut karena usia, berat badan berlebih, beban berulang, atau riwayat cedera lutut membuat sendi nyeri, kaku, dan kadang bengkak, terutama saat naik-turun tangga atau jongkok.",
   },
   {
     name: "ACL Injury",
     region: "Lutut",
-    keywords: ["acl", "anterior cruciate", "ligamen lutut", "lutut goyang", "rekonstruksi acl", "post acl", "pasca acl"],
+    keywords: ["acl", "anterior cruciate", "ligamen lutut", "lutut goyang"],
     mechanism:
       "Pendaratan setelah melompat, berhenti mendadak, atau memutar badan dengan kaki tertumpu (futsal, basket, badminton) membuat lutut tertekuk ke dalam dan berputar, merobek ligamen ACL.",
   },
@@ -235,7 +241,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Patellofemoral Pain Syndrome",
     region: "Lutut",
-    keywords: ["patellofemoral", "pfps", "runner's knee", "nyeri tempurung lutut", "nyeri lutut depan", "chondromalacia"],
+    keywords: ["patellofemoral", "pfps", "runner's knee", "nyeri tempurung lutut", "nyeri lutut depan"],
     mechanism:
       "Beban berulang pada sendi tempurung lutut (lari, naik tangga, jongkok) dengan otot paha depan dan panggul yang lemah membuat tempurung bergerak tidak seimbang dan menimbulkan nyeri lutut depan.",
   },
@@ -251,7 +257,7 @@ export const CONDITIONS: Condition[] = [
     region: "Pergelangan kaki",
     keywords: ["ankle sprain", "keseleo", "terkilir", "pergelangan kaki terkilir", "kaki terkilir", "keseleo kaki"],
     mechanism:
-      "Kaki terpijak atau mendarat pada posisi telapak menghadap ke dalam (inversi), misalnya saat futsal, menuruni tangga, atau jalan di permukaan tidak rata, meregangkan hingga merobek ligamen sisi luar pergelangan kaki.",
+      "Salah tumpu: kaki terpijak atau mendarat pada posisi telapak menghadap ke dalam (inversi), misalnya saat bermain bola atau futsal, menuruni tangga, atau jalan di permukaan tidak rata, meregangkan hingga merobek ligamen sisi luar pergelangan kaki.",
   },
   {
     name: "Achilles Tendinopathy",
@@ -288,7 +294,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Calf Strain",
     region: "Tungkai bawah",
-    keywords: ["calf strain", "betis", "cedera betis", "tennis leg"],
+    keywords: ["calf strain", "betis tertarik", "otot betis tertarik", "betis robek", "cedera betis", "tennis leg"],
     mechanism: "Dorongan tiba-tiba saat berlari atau melompat dengan lutut lurus meregangkan otot betis melebihi kapasitasnya.",
   },
   // ---------- Neurologi & lainnya ----------
@@ -357,7 +363,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Spondylolisthesis",
     region: "Punggung bawah",
-    keywords: ["spondylolisthesis", "spondilolistesis", "listesis", "pergeseran tulang belakang", "tulang belakang bergeser", "ruas tulang bergeser", "spondylolysis", "spondilolisis"],
+    keywords: ["spondylolisthesis", "spondilolistesis", "listesis", "pergeseran tulang belakang", "tulang belakang bergeser", "ruas tulang bergeser"],
     mechanism:
       "Satu ruas tulang belakang bergeser ke depan terhadap ruas di bawahnya, karena retak kecil pada bagian belakang ruas (sering pada olahraga yang banyak menengadah) atau degenerasi sendi faset dan diskus pada usia lanjut, sehingga pinggang nyeri saat berdiri lama dan menengadah.",
     levels: { "L4-L5": "Spondylolisthesis L4-L5", "L5-S1": "Spondylolisthesis L5-S1" },
@@ -494,7 +500,7 @@ export const CONDITIONS: Condition[] = [
   {
     name: "Scapular Dyskinesis",
     region: "Bahu",
-    keywords: ["scapular dyskinesis", "dyskinesis", "winging scapula", "scapula winging", "belikat menonjol"],
+    keywords: ["scapular dyskinesis", "dyskinesis", "winging scapula", "scapula winging"],
     mechanism: "Otot penstabil belikat (serratus anterior, trapezius bawah) lemah atau sarafnya cedera, sehingga gerak belikat tidak terkendali saat lengan diangkat dan bahu mudah nyeri.",
   },
   {
@@ -853,6 +859,473 @@ export const CONDITIONS: Condition[] = [
     keywords: ["pasca covid", "post covid", "long covid", "deconditioning", "lemas setelah dirawat", "pasca rawat inap", "tirah baring lama"],
     mechanism: "Infeksi berat atau rawat inap dan tirah baring yang lama membuat otot mengecil, daya tahan jantung-paru turun, dan mudah lelah atau sesak saat beraktivitas.",
   },
+  // ---------- Nyeri per area (umum): when no specific diagnosis is written yet ----------
+  {
+    name: "Knee Pain",
+    region: "Lutut",
+    general: true,
+    keywords: ["knee pain", "nyeri lutut", "sakit lutut", "lutut sakit", "lutut nyeri", "ngilu lutut", "lutut ngilu", "linu lutut", "lutut linu", "nyeri sendi lutut", "lutut tidak nyaman", "cedera lutut", "knee injury"],
+    mechanism:
+      "Beban berulang pada lutut (naik-turun tangga, jongkok, berlari, melompat), salah tumpu atau lutut terpelintir saat berolahraga, kelemahan otot paha dan pinggul, atau berat badan berlebih membuat jaringan di sekitar sendi lutut teriritasi dan nyeri.",
+  },
+  {
+    name: "Shoulder Pain",
+    region: "Bahu",
+    general: true,
+    keywords: ["shoulder pain", "nyeri bahu", "sakit bahu", "bahu sakit", "bahu nyeri", "ngilu bahu", "nyeri sendi bahu", "nyeri pundak", "sakit pundak", "cedera bahu", "shoulder injury"],
+    mechanism:
+      "Gerakan mengangkat lengan berulang atau di atas kepala, mengangkat dan membawa beban, tidur bertumpu pada satu bahu, postur bahu membungkuk ke depan, atau jatuh bertumpu pada tangan membuat jaringan di sekitar sendi bahu teriritasi dan nyeri.",
+  },
+  {
+    name: "Hip Pain",
+    region: "Panggul",
+    general: true,
+    keywords: ["hip pain", "nyeri pinggul", "sakit pinggul", "pinggul sakit", "pinggul nyeri", "ngilu pinggul", "nyeri sendi pinggul", "nyeri panggul", "sakit panggul", "cedera pinggul"],
+    mechanism:
+      "Duduk lama, berjalan atau berlari jauh, tidur miring bertumpu pada satu sisi, kelemahan otot bokong, atau proses degenerasi membuat sendi pinggul dan jaringan di sekitarnya teriritasi dan nyeri.",
+  },
+  {
+    name: "Ankle Pain",
+    region: "Pergelangan kaki",
+    general: true,
+    keywords: ["ankle pain", "nyeri ankle", "sakit ankle", "ankle sakit", "nyeri pergelangan kaki", "sakit pergelangan kaki", "pergelangan kaki sakit", "nyeri mata kaki", "sakit mata kaki", "ankle tidak nyaman", "cedera ankle", "cedera pergelangan kaki"],
+    mechanism:
+      "Salah tumpu atau kaki terpelintir saat berjalan di permukaan tidak rata dan berolahraga, beban berulang saat berlari dan melompat, alas kaki yang kurang menopang, atau sisa cedera lama membuat jaringan di sekitar pergelangan kaki teriritasi dan nyeri.",
+  },
+  {
+    name: "Foot Pain",
+    region: "Kaki",
+    general: true,
+    keywords: ["foot pain", "nyeri kaki", "sakit kaki", "kaki sakit", "nyeri telapak kaki", "sakit telapak kaki", "telapak kaki sakit", "nyeri punggung kaki", "kaki pegal"],
+    mechanism:
+      "Berdiri atau berjalan lama, alas kaki yang sempit atau kurang menopang, bentuk lengkung kaki yang terlalu datar atau tinggi, dan berat badan berlebih memberi beban berulang pada telapak dan punggung kaki sehingga nyeri.",
+  },
+  {
+    name: "Elbow Pain",
+    region: "Siku",
+    general: true,
+    keywords: ["elbow pain", "nyeri siku", "sakit siku", "siku sakit", "siku nyeri", "ngilu siku", "cedera siku"],
+    mechanism:
+      "Gerakan menggenggam, memutar, dan mengangkat berulang (pekerjaan tangan, olahraga raket, angkat beban) atau benturan dan jatuh bertumpu pada tangan membuat otot, tendon, atau sendi di sekitar siku teriritasi.",
+  },
+  {
+    name: "Wrist Pain",
+    region: "Pergelangan tangan",
+    general: true,
+    keywords: ["wrist pain", "nyeri pergelangan tangan", "sakit pergelangan tangan", "pergelangan tangan sakit", "cedera pergelangan tangan"],
+    mechanism:
+      "Gerakan pergelangan tangan berulang (mengetik, memakai ponsel, mengangkat bayi, memotong), bertumpu pada tangan, atau jatuh bertumpu pada telapak tangan membuat tendon, ligamen, atau sendi pergelangan tangan teriritasi.",
+  },
+  {
+    name: "Hand & Finger Pain",
+    region: "Tangan",
+    general: true,
+    keywords: ["hand pain", "finger pain", "nyeri tangan", "sakit tangan", "tangan sakit", "nyeri jari", "sakit jari", "jari sakit", "jari nyeri", "nyeri telapak tangan", "cedera jari"],
+    mechanism:
+      "Menggenggam, mencubit, atau mengetik berulang, jari terbentur atau tertekuk paksa, atau proses degenerasi membuat sendi, tendon, dan otot kecil di tangan dan jari teriritasi.",
+  },
+  {
+    name: "Thigh Pain",
+    region: "Paha",
+    general: true,
+    keywords: ["thigh pain", "nyeri paha", "sakit paha", "paha sakit", "paha nyeri", "paha pegal"],
+    mechanism:
+      "Otot paha tertarik saat berlari cepat, menendang, atau melompat, benturan langsung, atau beban latihan yang naik terlalu cepat membuat otot dan tendon paha nyeri; nyeri paha juga bisa menjalar dari pinggang atau pinggul.",
+  },
+  {
+    name: "Calf & Lower Leg Pain",
+    region: "Tungkai bawah",
+    general: true,
+    keywords: ["calf pain", "leg pain", "lower leg pain", "nyeri betis", "sakit betis", "betis sakit", "betis nyeri", "betis pegal", "nyeri tungkai", "sakit tungkai", "nyeri tungkai bawah"],
+    mechanism:
+      "Otot betis bekerja berlebihan saat berlari, berjalan jauh, atau berdiri lama, beban latihan yang naik terlalu cepat, atau otot jarang diregangkan membuat otot dan tendon tungkai bawah nyeri dan mudah kram.",
+  },
+  {
+    name: "Chest Wall Pain / Costochondritis",
+    region: "Dada",
+    general: true,
+    keywords: ["costochondritis", "kostokondritis", "chest wall pain", "nyeri dinding dada", "nyeri dada", "nyeri dada saat napas", "nyeri rusuk", "sakit rusuk", "nyeri tulang rusuk", "rib pain", "nyeri iga", "intercostal", "otot sela iga"],
+    mechanism:
+      "Batuk keras berulang, benturan pada dada, mengangkat beban sambil memutar badan, atau postur membungkuk lama membuat sambungan tulang rusuk dan otot di antaranya meradang; nyeri bertambah saat menarik napas dalam atau ditekan. Nyeri dada perlu dipastikan bukan dari jantung.",
+  },
+  {
+    name: "Joint Pain (Arthralgia)",
+    region: "Sendi",
+    general: true,
+    keywords: ["joint pain", "arthralgia", "artralgia", "nyeri sendi", "sakit sendi", "sendi sakit", "ngilu sendi",  "linu"],
+    mechanism:
+      "Beban berulang, kurang gerak, berat badan berlebih, perubahan cuaca, atau proses degenerasi dan peradangan membuat satu atau beberapa sendi terasa nyeri, ngilu, atau kaku.",
+  },
+  {
+    name: "Muscle Strain",
+    region: "Otot",
+    general: true,
+    keywords: ["muscle strain", "strain otot", "otot tertarik", "otot ketarik", "tarikan otot", "cedera otot", "pulled muscle", "otot robek"],
+    mechanism:
+      "Otot diregangkan atau dikontraksikan melebihi kemampuannya (gerakan mendadak, mengangkat beban, berolahraga tanpa pemanasan, atau saat otot lelah) sehingga serabut otot teregang atau robek sebagian.",
+  },
+  {
+    name: "Contusion",
+    region: "Otot",
+    general: true,
+    keywords: ["contusion", "kontusio", "memar", "lebam", "bruise", "terbentur", "kena benturan", "benturan langsung"],
+    mechanism: "Benturan langsung pada otot atau tulang (tertendang, terjatuh, tertabrak) merusak pembuluh darah kecil sehingga timbul memar, bengkak, dan nyeri saat ditekan atau digerakkan.",
+  },
+  {
+    name: "Muscle Cramp",
+    region: "Otot",
+    general: true,
+    keywords: ["muscle cramp", "kram", "kram otot", "keram", "keram otot", "kejang otot", "kram betis"],
+    mechanism: "Otot berkontraksi mendadak dan tidak bisa rileks, dipicu kelelahan, kurang cairan atau elektrolit, otot yang jarang diregangkan, atau posisi statis yang lama.",
+  },
+  {
+    name: "Post-Operative Rehabilitation",
+    region: "Pasca operasi",
+    general: true,
+    keywords: ["post operative", "post operasi", "post op", "pasca operasi", "setelah operasi", "habis operasi", "pasca bedah"],
+    mechanism: "Operasi dan masa istirahat setelahnya membuat sendi kaku, otot melemah, dan daya tahan menurun, sehingga gerak, kekuatan, dan aktivitas perlu dipulihkan bertahap sesuai anjuran dokter bedah.",
+  },
+  {
+    name: "Joint Stiffness after Immobilisation",
+    region: "Sendi",
+    general: true,
+    keywords: ["joint stiffness", "kaku sendi", "sendi kaku", "pasca gips", "setelah gips", "lepas gips", "post cast", "kaku setelah gips", "kaku setelah bidai"],
+    mechanism: "Sendi yang lama tidak digerakkan (gips, bidai, penyangga, atau tirah baring) membuat kapsul sendi dan otot di sekitarnya memendek dan melemah, sehingga gerak sendi terbatas dan nyeri saat mulai digerakkan.",
+  },
+  {
+    name: "Osteoarthritis",
+    region: "Sendi",
+    general: true,
+    keywords: ["osteoarthritis", "osteoartritis", "oa", "pengapuran", "pengapuran sendi", "sendi aus", "radang sendi degeneratif", "degenerative joint disease"],
+    mechanism: "Tulang rawan sendi menipis dan aus seiring usia, beban berulang, berat badan berlebih, atau bekas cedera sendi, sehingga sendi nyeri saat dipakai, kaku di pagi hari, dan geraknya berkurang.",
+  },
+  {
+    name: "Joint Hypermobility",
+    region: "Sendi",
+    keywords: ["hypermobility", "hipermobilitas", "joint hypermobility", "sendi terlalu lentur", "sendi lentur berlebih", "ehlers danlos"],
+    mechanism: "Jaringan ikat yang lebih lentur dari biasanya (bawaan) membuat sendi bergerak melebihi batas normal, sehingga mudah terkilir, pegal, dan cepat lelah bila otot penyangganya lemah.",
+  },
+  // ---------- Lutut ----------
+  {
+    name: "Knee Sprain",
+    region: "Lutut",
+    keywords: ["knee sprain", "lutut terkilir", "lutut keseleo", "lutut terpelintir", "keseleo lutut", "terkilir lutut", "cedera ligamen lutut"],
+    mechanism: "Lutut terpelintir atau tertekuk ke samping saat mendarat, berbalik arah mendadak, atau salah tumpu (misalnya saat bermain bola) meregangkan ligamen dan kapsul sendi lutut.",
+  },
+  {
+    name: "Post-ACL Reconstruction",
+    region: "Pasca operasi",
+    keywords: ["acl reconstruction", "acl recon", "acl r", "aclr", "post acl", "pasca acl", "rekonstruksi acl", "operasi acl", "post op acl", "pasca operasi acl", "post operasi acl", "setelah operasi acl"],
+    mechanism: "Ligamen ACL yang putus diganti cangkok tendon melalui operasi; lutut dipulihkan bertahap (gerak sendi, kekuatan otot paha, keseimbangan, latihan lari dan lompat) sebelum kembali berolahraga.",
+  },
+  {
+    name: "Chondromalacia Patellae",
+    region: "Lutut",
+    keywords: ["chondromalacia", "chondromalacia patella", "chondromalacia patellae", "kondromalasia", "tulang rawan tempurung lutut"],
+    mechanism: "Tulang rawan di balik tempurung lutut melunak dan aus karena tempurung bergerak tidak lurus, otot paha lemah, atau beban berulang saat jongkok, naik tangga, dan duduk lama dengan lutut menekuk.",
+  },
+  {
+    name: "Plica Syndrome",
+    region: "Lutut",
+    keywords: ["plica", "plica syndrome", "sindrom plika", "medial plica"],
+    mechanism: "Lipatan lapisan sendi lutut (plika) teriritasi dan menebal karena gerakan menekuk-meluruskan lutut berulang (bersepeda, berlari) atau benturan, sehingga nyeri dan terasa klik di lutut sisi dalam.",
+  },
+  {
+    name: "Hoffa's Fat Pad Syndrome",
+    region: "Lutut",
+    keywords: ["hoffa", "hoffa's", "fat pad", "fat pad syndrome", "bantalan lemak lutut"],
+    mechanism: "Bantalan lemak di bawah tempurung lutut terjepit saat lutut terlalu lurus (hiperekstensi) berulang atau terbentur langsung, sehingga meradang dan nyeri di bawah tempurung lutut.",
+  },
+  {
+    name: "Quadriceps Tendinopathy",
+    region: "Lutut",
+    keywords: ["quadriceps tendinopathy", "quadriceps tendinitis", "tendinitis quadriceps", "nyeri di atas tempurung lutut"],
+    mechanism: "Beban berulang pada tendon otot paha depan saat melompat, jongkok dengan beban, atau naik-turun tangga membuat tendon di atas tempurung lutut teriritasi.",
+  },
+  {
+    name: "Genu Valgum / Varum",
+    region: "Lutut",
+    keywords: ["genu valgum", "genu varum", "kaki x", "kaki o", "lutut x", "lutut o", "bow legs", "bow leg", "knock knees", "knock knee"],
+    mechanism: "Tungkai bengkok ke dalam (X) atau ke luar (O), bisa bagian dari perkembangan anak, atau karena otot lemah, berat badan berlebih, atau pengapuran lutut pada dewasa, sehingga beban sendi lutut tidak merata.",
+  },
+  // ---------- Pergelangan kaki & kaki ----------
+  {
+    name: "High Ankle Sprain",
+    region: "Pergelangan kaki",
+    keywords: ["high ankle sprain", "syndesmosis", "syndesmotic sprain", "sindesmosis", "cedera syndesmosis"],
+    mechanism: "Kaki terputar keluar dengan kuat saat menapak (olahraga kontak, mendarat salah) meregangkan ligamen yang mengikat tulang kering dan tulang betis tepat di atas mata kaki.",
+  },
+  {
+    name: "Peroneal Tendinopathy",
+    region: "Pergelangan kaki",
+    keywords: ["peroneal tendinopathy", "peroneal tendinitis", "tendinitis peroneus", "nyeri mata kaki luar"],
+    mechanism: "Beban berulang saat berlari di permukaan miring, keseleo berulang, atau kaki yang cenderung miring ke luar membuat tendon peroneus di belakang mata kaki luar teriritasi.",
+  },
+  {
+    name: "Posterior Tibial Tendon Dysfunction",
+    region: "Pergelangan kaki",
+    keywords: ["posterior tibial tendon", "pttd", "tibialis posterior", "tendinitis tibialis posterior", "nyeri mata kaki dalam"],
+    mechanism: "Tendon tibialis posterior yang menopang lengkung kaki melemah dan teriritasi karena beban berulang, berat badan berlebih, atau usia, sehingga lengkung kaki makin turun dan mata kaki dalam nyeri.",
+  },
+  {
+    name: "Tarsal Tunnel Syndrome",
+    region: "Kaki",
+    keywords: ["tarsal tunnel", "tarsal tunnel syndrome", "sindrom terowongan tarsal", "kesemutan telapak kaki", "telapak kaki kebas"],
+    mechanism: "Saraf tibialis tertekan di terowongan sisi dalam mata kaki karena kaki datar, bengkak, bekas keseleo, atau sepatu sempit, sehingga telapak kaki kesemutan, panas, atau nyeri.",
+  },
+  {
+    name: "Ankle Impingement",
+    region: "Pergelangan kaki",
+    keywords: ["ankle impingement", "anterior impingement", "posterior impingement", "jepitan pergelangan kaki"],
+    mechanism: "Jaringan lunak atau taji tulang terjepit di depan atau belakang sendi pergelangan kaki saat menekuk penuh, sering setelah keseleo berulang atau pada penari dan pesepak bola.",
+  },
+  {
+    name: "Hallux Rigidus",
+    region: "Kaki",
+    keywords: ["hallux rigidus", "jempol kaki kaku", "pengapuran jempol kaki", "big toe arthritis"],
+    mechanism: "Sendi pangkal jempol kaki mengalami pengapuran karena beban berulang saat menolak (berjalan, berlari, berjinjit) atau bekas cedera, sehingga jempol kaku dan nyeri saat menekuk ke atas.",
+  },
+  {
+    name: "Turf Toe",
+    region: "Kaki",
+    keywords: ["turf toe", "jempol kaki terkilir", "cedera jempol kaki"],
+    mechanism: "Jempol kaki tertekuk ke atas secara berlebihan saat menolak di permukaan keras atau rumput sintetis, meregangkan kapsul dan ligamen di pangkal jempol.",
+  },
+  {
+    name: "Post-Operative Ankle",
+    region: "Pasca operasi",
+    keywords: ["post op ankle", "pasca operasi ankle", "pasca operasi pergelangan kaki", "operasi pergelangan kaki", "orif ankle", "ankle orif"],
+    mechanism: "Operasi pada pergelangan kaki (pen pada patah tulang, perbaikan ligamen atau tendon) disertai masa tanpa tumpuan membuat sendi kaku, otot betis melemah, dan keseimbangan berkurang.",
+  },
+  // ---------- Panggul & paha ----------
+  {
+    name: "Snapping Hip",
+    region: "Panggul",
+    keywords: ["snapping hip", "coxa saltans", "pinggul berbunyi", "bunyi klik pinggul", "pinggul klik"],
+    mechanism: "Tendon atau pita jaringan di sekitar pinggul tergelincir melewati tonjolan tulang saat pinggul bergerak, karena otot yang tegang atau gerakan berulang (menari, berlari), sehingga terasa atau terdengar klik.",
+  },
+  {
+    name: "Hip Fracture",
+    region: "Panggul",
+    keywords: ["hip fracture", "fraktur collum femur", "fraktur kolum femur", "patah tulang pinggul", "fraktur pinggul", "fraktur femur proksimal", "fraktur intertrochanter"],
+    mechanism: "Jatuh dari posisi berdiri pada lansia dengan tulang keropos, atau benturan keras pada usia muda, mematahkan pangkal tulang paha; setelah operasi perlu latihan menumpu, berjalan, dan kekuatan bertahap.",
+  },
+  {
+    name: "Avascular Necrosis of the Hip",
+    region: "Panggul",
+    keywords: ["avascular necrosis", "avn", "nekrosis avaskular", "osteonecrosis", "osteonekrosis", "avn femur"],
+    mechanism: "Aliran darah ke kepala tulang paha terganggu (steroid jangka panjang, alkohol, bekas patah tulang), sehingga tulang melemah dan perlahan kolaps; pinggul nyeri saat menumpu dan berjalan.",
+  },
+  {
+    name: "Proximal Hamstring Tendinopathy",
+    region: "Paha",
+    keywords: ["proximal hamstring tendinopathy", "hamstring tendinopathy", "tendinitis hamstring", "nyeri tulang duduk", "nyeri pangkal hamstring"],
+    mechanism: "Beban berulang pada pangkal otot hamstring di tulang duduk (lari menanjak, sprint, duduk lama di permukaan keras) membuat tendonnya teriritasi dan nyeri saat duduk atau berlari.",
+  },
+  // ---------- Bahu ----------
+  {
+    name: "Shoulder Instability",
+    region: "Bahu",
+    keywords: ["shoulder instability", "bahu tidak stabil", "bahu sering lepas", "bahu longgar", "bankart", "shoulder subluxation", "subluksasi bahu"],
+    mechanism: "Bahu pernah lepas sendi, atau ligamennya longgar (bawaan atau gerakan berulang di atas kepala seperti renang dan voli), sehingga sendi mudah bergeser saat lengan diangkat dan diputar.",
+  },
+  {
+    name: "Proximal Humerus Fracture",
+    region: "Bahu",
+    keywords: ["proximal humerus fracture", "fraktur humerus", "fraktur humerus proksimal", "patah tulang lengan atas", "humerus fracture"],
+    mechanism: "Jatuh bertumpu pada lengan atau langsung pada bahu, terutama pada lansia dengan tulang keropos, mematahkan pangkal tulang lengan atas; setelah imobilisasi bahu menjadi kaku dan lemah.",
+  },
+  {
+    name: "Clavicle Fracture",
+    region: "Bahu",
+    keywords: ["clavicle fracture", "fraktur klavikula", "fraktur clavicula", "patah tulang selangka", "patah selangka"],
+    mechanism: "Jatuh dengan bahu menghantam tanah atau bertumpu pada tangan yang terulur (bersepeda, motor, olahraga) mematahkan tulang selangka; setelah masa penyangga bahu perlu dilatih kembali.",
+  },
+  {
+    name: "Biceps Tendon Rupture",
+    region: "Bahu",
+    keywords: ["biceps rupture", "biceps tendon rupture", "ruptur biceps", "tendon biceps putus", "popeye sign"],
+    mechanism: "Mengangkat beban berat dengan siku menekuk secara mendadak, atau tendon yang sudah aus, membuat tendon otot biceps putus di bahu atau di siku.",
+  },
+  {
+    name: "Winged Scapula",
+    region: "Bahu",
+    keywords: ["winged scapula", "scapular winging", "long thoracic nerve", "belikat menonjol", "tulang belikat menonjol"],
+    mechanism: "Saraf yang menggerakkan otot serratus anterior tertekan atau teregang (membawa beban di bahu, gerakan berulang di atas kepala, operasi dada), sehingga tulang belikat menonjol ke belakang saat lengan mendorong.",
+  },
+  {
+    name: "Pectoralis Strain",
+    region: "Dada",
+    keywords: ["pectoralis strain", "pectoral strain", "otot dada tertarik", "cedera otot dada", "nyeri otot dada"],
+    mechanism: "Beban berlebih saat bench press, push-up, atau menahan jatuh membuat otot dada (pectoralis) tertarik atau robek sebagian.",
+  },
+  // ---------- Siku, pergelangan & tangan ----------
+  {
+    name: "Elbow Fracture / Dislocation",
+    region: "Siku",
+    keywords: ["elbow dislocation", "elbow fracture", "dislokasi siku", "siku lepas", "fraktur siku", "patah tulang siku", "post op siku", "fraktur olecranon"],
+    mechanism: "Jatuh bertumpu pada tangan yang terulur membuat sendi siku bergeser atau tulang di sekitarnya patah; setelah imobilisasi siku sulit diluruskan dan ditekuk penuh.",
+  },
+  {
+    name: "Scaphoid Fracture",
+    region: "Pergelangan tangan",
+    keywords: ["scaphoid fracture", "fraktur scaphoid", "fraktur skafoid", "patah tulang skafoid"],
+    mechanism: "Jatuh bertumpu pada telapak tangan dengan pergelangan menekuk ke belakang mematahkan tulang skafoid di pangkal ibu jari; setelah gips pergelangan kaku dan genggaman lemah.",
+  },
+  {
+    name: "Hand / Finger Fracture",
+    region: "Tangan",
+    keywords: ["hand fracture", "finger fracture", "boxer's fracture", "fraktur metakarpal", "fraktur metacarpal", "patah tulang tangan", "patah jari", "fraktur jari", "fraktur phalanx"],
+    mechanism: "Meninju benda keras, tangan tertimpa, atau jari terbentur bola mematahkan tulang telapak tangan atau jari; setelah bidai atau operasi jari kaku dan genggaman lemah.",
+  },
+  {
+    name: "Dupuytren's Contracture",
+    region: "Tangan",
+    keywords: ["dupuytren", "dupuytren's", "dupuytren's contracture", "kontraktur dupuytren", "jari tertarik ke telapak"],
+    mechanism: "Jaringan ikat di telapak tangan menebal dan memendek perlahan (keturunan, diabetes, usia), sehingga jari manis dan kelingking tertarik menekuk dan sulit diluruskan.",
+  },
+  {
+    name: "Thumb CMC Osteoarthritis",
+    region: "Tangan",
+    keywords: ["thumb arthritis", "cmc arthritis", "thumb cmc", "rhizarthrosis", "pengapuran ibu jari", "osteoartritis ibu jari", "nyeri pangkal ibu jari"],
+    mechanism: "Sendi pangkal ibu jari aus karena usia dan beban berulang saat mencubit, memutar tutup botol, atau menggenggam, sehingga nyeri dan genggaman melemah.",
+  },
+  {
+    name: "Skier's Thumb",
+    region: "Tangan",
+    keywords: ["skier's thumb", "gamekeeper's thumb", "ibu jari terkilir", "ibu jari keseleo", "ligamen ibu jari"],
+    mechanism: "Ibu jari tertekuk paksa ke arah luar saat jatuh sambil memegang sesuatu (setang, tongkat) atau tertabrak bola, meregangkan atau merobek ligamen di pangkal ibu jari.",
+  },
+  {
+    name: "Wrist Tendinitis",
+    region: "Pergelangan tangan",
+    keywords: ["wrist tendinitis", "wrist tendinopathy", "tendinitis pergelangan tangan", "radang tendon pergelangan tangan"],
+    mechanism: "Gerakan pergelangan tangan berulang (mengetik, mengangkat bayi, memotong, olahraga raket) membuat tendon di sekitar pergelangan tangan meradang.",
+  },
+  {
+    name: "Hand Tendon Repair",
+    region: "Pasca operasi",
+    keywords: ["tendon repair", "flexor tendon repair", "extensor tendon repair", "sambung tendon", "operasi tendon tangan", "pasca operasi tangan", "post op tangan"],
+    mechanism: "Tendon tangan yang putus karena luka sayat atau cedera disambung melalui operasi; latihan gerak bertahap dengan bidai menjaga tendon tidak lengket dan tidak putus kembali.",
+  },
+  // ---------- Tulang belakang & dada ----------
+  {
+    name: "Thoracic Hyperkyphosis",
+    region: "Punggung atas",
+    keywords: ["kyphosis", "hyperkyphosis", "kifosis", "hiperkifosis", "bungkuk", "punggung bungkuk", "hunchback", "dowager's hump"],
+    mechanism: "Kebiasaan duduk dan berdiri membungkuk, otot punggung yang lemah, pengeroposan tulang, atau usia membuat lengkung punggung atas berlebihan sehingga punggung dan leher mudah pegal.",
+  },
+  {
+    name: "Hyperlordosis",
+    region: "Punggung bawah",
+    keywords: ["hyperlordosis", "hiperlordosis", "lordosis", "swayback", "pinggang terlalu melengkung"],
+    mechanism: "Otot perut dan bokong yang lemah, otot depan pinggul yang tegang, perut besar atau kehamilan, dan sepatu hak tinggi membuat lengkung pinggang berlebihan sehingga sendi belakang tulang belakang tertekan.",
+  },
+  {
+    name: "Spondylolysis",
+    region: "Punggung bawah",
+    keywords: ["spondylolysis", "spondilolisis", "pars defect", "pars interarticularis"],
+    mechanism: "Gerakan menekuk ke belakang dan memutar badan berulang (senam, angkat beban, bulu tangkis, kriket) menimbulkan retak tekanan di bagian belakang ruas tulang pinggang, sering pada remaja yang aktif berolahraga.",
+  },
+  {
+    name: "Degenerative Disc Disease",
+    region: "Punggung bawah",
+    keywords: ["degenerative disc disease", "degenerative disc", "ddd", "degenerasi diskus", "diskus aus", "dehidrasi diskus"],
+    mechanism: "Bantalan antarruas tulang belakang kehilangan cairan dan menipis seiring usia, beban berulang, merokok, atau cedera lama, sehingga ruas kurang stabil dan mudah nyeri saat duduk atau membungkuk lama.",
+  },
+  {
+    name: "Cervical Myelopathy",
+    region: "Leher",
+    keywords: ["cervical myelopathy", "myelopathy", "mielopati", "mielopati servikal", "tangan kikuk"],
+    mechanism: "Penyempitan saluran tulang leher oleh pengapuran atau penonjolan diskus menekan sumsum tulang belakang, sehingga tangan kikuk dan kesemutan serta jalan tidak stabil yang memburuk perlahan.",
+  },
+  {
+    name: "Rib Fracture",
+    region: "Dada",
+    keywords: ["rib fracture", "fraktur costae", "fraktur kosta", "fraktur iga", "patah tulang rusuk", "patah iga"],
+    mechanism: "Benturan atau jatuh pada dada (kecelakaan, olahraga), atau batuk keras pada tulang keropos, mematahkan tulang rusuk sehingga nyeri saat bernapas dalam, batuk, dan bergerak.",
+  },
+  {
+    name: "Abdominal Strain",
+    region: "Perut",
+    keywords: ["abdominal strain", "otot perut tertarik", "cedera otot perut", "nyeri otot perut"],
+    mechanism: "Gerakan memutar badan mendadak, sit-up berlebihan, mengangkat beban, atau batuk keras membuat otot perut tertarik atau robek sebagian.",
+  },
+  // ---------- Neurologi & lansia ----------
+  {
+    name: "Multiple Sclerosis",
+    region: "Neurologi",
+    keywords: ["multiple sclerosis", "sklerosis multipel", "multipel sklerosis"],
+    mechanism: "Sistem kekebalan menyerang selubung saraf di otak dan sumsum tulang belakang, sehingga timbul kelemahan, kaku, mudah lelah, dan gangguan keseimbangan yang kambuh-kambuhan.",
+  },
+  {
+    name: "Balance Disorder / Fall Risk",
+    region: "Lansia",
+    keywords: ["balance disorder", "fall risk", "gangguan keseimbangan", "keseimbangan menurun", "mudah jatuh", "sering jatuh", "risiko jatuh", "jalan tidak stabil", "limbung"],
+    mechanism: "Kekuatan otot tungkai, refleks keseimbangan, penglihatan, dan rasa posisi di kaki menurun (usia, penyakit saraf, obat-obatan, jarang bergerak), sehingga jalan tidak stabil dan mudah jatuh.",
+  },
+  {
+    name: "Geriatric Weakness / Sarcopenia",
+    region: "Lansia",
+    keywords: ["sarcopenia", "sarkopenia", "geriatri", "geriatric", "lansia lemah", "kelemahan lansia", "otot mengecil", "frailty"],
+    mechanism: "Massa dan kekuatan otot berkurang seiring usia, ditambah kurang aktivitas dan asupan protein, sehingga sulit bangkit dari kursi, naik tangga, dan mudah lelah.",
+  },
+  // ---------- Anak ----------
+  {
+    name: "Toe Walking",
+    region: "Anak",
+    keywords: ["toe walking", "jalan jinjit", "berjalan jinjit", "jalan berjinjit", "selalu jinjit"],
+    mechanism: "Anak terbiasa berjalan dengan ujung kaki karena otot betis dan tendon Achilles pendek, kebiasaan, atau terkait gangguan saraf dan perkembangan, sehingga tumit jarang menapak.",
+  },
+  {
+    name: "Autism Spectrum Disorder",
+    region: "Anak",
+    keywords: ["autism", "autisme", "autis", "asd", "spektrum autisme"],
+    mechanism: "Gangguan perkembangan saraf yang memengaruhi komunikasi dan perilaku, sering disertai kesulitan koordinasi gerak, keseimbangan, dan pengolahan sensori yang perlu dilatih.",
+  },
+  {
+    name: "Spina Bifida",
+    region: "Anak",
+    keywords: ["spina bifida", "myelomeningocele", "mielomeningokel"],
+    mechanism: "Tulang belakang bayi tidak menutup sempurna sejak dalam kandungan sehingga saraf di bawahnya terganggu; kekuatan tungkai, berjalan, dan kontrol berkemih perlu dibantu.",
+  },
+  {
+    name: "Developmental Dysplasia of the Hip",
+    region: "Anak",
+    keywords: ["ddh", "developmental dysplasia", "hip dysplasia", "displasia pinggul", "dislokasi pinggul bawaan"],
+    mechanism: "Mangkuk sendi pinggul bayi terbentuk dangkal sejak lahir (posisi sungsang, riwayat keluarga, bedong terlalu kencang), sehingga kepala tulang paha mudah bergeser.",
+  },
+  // ---------- Kardiorespirasi & lainnya ----------
+  {
+    name: "Cardiac Rehabilitation",
+    region: "Kardiorespirasi",
+    keywords: ["cardiac rehab", "cardiac rehabilitation", "rehabilitasi jantung", "pasca serangan jantung", "post mi", "pasca pasang ring", "pasca cabg", "post cabg", "bypass jantung", "pasca operasi jantung", "gagal jantung", "heart failure"],
+    mechanism: "Serangan jantung, pemasangan ring, operasi bypass, atau gagal jantung menurunkan daya tahan jantung; latihan bertahap yang terpantau mengembalikan kemampuan beraktivitas dengan aman.",
+  },
+  {
+    name: "Asthma",
+    region: "Kardiorespirasi",
+    keywords: ["asthma", "asma", "mengi", "napas berbunyi"],
+    mechanism: "Saluran napas yang sensitif menyempit dan berlendir saat terpicu alergen, debu, udara dingin, infeksi, atau olahraga berat, sehingga sesak dan napas berbunyi (mengi).",
+  },
+  {
+    name: "Pneumonia / Sputum Retention",
+    region: "Kardiorespirasi",
+    keywords: ["pneumonia", "radang paru", "dahak sulit keluar", "dahak menumpuk", "fisioterapi dada", "chest physiotherapy", "bronkiektasis", "bronchiectasis"],
+    mechanism: "Infeksi atau penyakit paru membuat dahak menumpuk di saluran napas dan sebagian paru tidak mengembang, sehingga perlu bantuan mengeluarkan dahak dan latihan napas.",
+  },
+  {
+    name: "Amputation / Prosthetic Training",
+    region: "Lainnya",
+    keywords: ["amputation", "amputasi", "amputee", "prosthesis", "prostesis", "kaki palsu", "tangan palsu", "stump", "puntung"],
+    mechanism: "Tungkai atau lengan diamputasi karena kecelakaan, diabetes, atau gangguan pembuluh darah; puntung perlu dirawat dan dibentuk, otot dikuatkan, dan pasien dilatih berjalan atau beraktivitas dengan prostesis.",
+  },
+  {
+    name: "Burn Rehabilitation",
+    region: "Lainnya",
+    keywords: ["burn", "burns", "luka bakar", "kontraktur luka bakar", "parut luka bakar"],
+    mechanism: "Luka bakar yang sembuh membentuk jaringan parut yang menarik kulit di atas sendi, sehingga gerak terbatas tanpa peregangan, pemakaian penyangga, dan latihan rutin.",
+  },
 ];
 
 const norm = (s: string) =>
@@ -868,27 +1341,42 @@ const norm = (s: string) =>
     })
     .trim();
 
+/* Little words that sit inside a complaint but not inside a library phrase: "nyeri pada lutut", "sakit di bagian
+   lutut" and "lutut yang nyeri" read as "nyeri lutut", "sakit lutut" and "lutut nyeri". */
+const FILLER = new Set(["pada", "di", "bagian", "area", "daerah", "sebelah", "yang", "terasa"]);
+const bare = (s: string) =>
+  norm(s)
+    .split(" ")
+    .filter((w) => !FILLER.has(w))
+    .join(" ");
+
 /** The spine level named in a normalised complaint, as "L4-L5". */
 function spineLevel(t: string) {
   const m = /\b([cl])(\d) ([cls])(\d)\b/.exec(t);
   return m ? `${m[1]}${m[2]}-${m[3]}${m[4]}`.toUpperCase() : null;
 }
 
-/** The case a complaint points to: the longest keyword (or name) found in it. */
+/** The case a complaint points to: the longest keyword (or name) found in it; a general case by body area only
+ *  when no specific one is ("nyeri lutut, ACL" is the ACL injury, "nyeri lutut" alone is Knee Pain). */
 export function matchCondition(text?: string | null): Condition | null {
-  const t = ` ${norm(text ?? "")} `;
+  const t = ` ${bare(text ?? "")} `;
   if (t.trim().length < 3) return null;
-  let best: Condition | null = null;
-  let len = 0;
-  for (const c of CONDITIONS) {
-    for (const k of [c.name, ...c.keywords]) {
-      const n = norm(k);
-      if (n.length > len && t.includes(` ${n} `)) {
-        best = c;
-        len = n.length;
+  const longest = (general: boolean) => {
+    let best: Condition | null = null;
+    let len = 0;
+    for (const c of CONDITIONS) {
+      if (!!c.general !== general) continue;
+      for (const k of [c.name, ...c.keywords]) {
+        const n = bare(k);
+        if (n.length > len && t.includes(` ${n} `)) {
+          best = c;
+          len = n.length;
+        }
       }
     }
-  }
+    return best;
+  };
+  const best = longest(false) ?? longest(true);
   // "HNP" or "disc bulging" with a level: the case for that level.
   const lv = best?.levels ? spineLevel(t) : null;
   const byLevel = lv ? best!.levels![lv] : null;
@@ -897,21 +1385,73 @@ export function matchCondition(text?: string | null): Condition | null {
 
 /** Cases whose name or keywords contain what was typed, for the suggestions under the complaint. */
 export function searchConditions(text: string, limit = 5): Condition[] {
-  const q = norm(text);
+  const q = bare(text);
   if (q.length < 2) return [];
   const words = q.split(" ").filter((w) => w.length >= 3);
   const scored = CONDITIONS.map((c) => {
-    const hay = [c.name, ...c.keywords].map(norm);
+    const hay = [c.name, ...c.keywords].map(bare);
     let score = 0;
-    if (norm(c.name).startsWith(q)) score = 4;
+    if (bare(c.name).startsWith(q)) score = 4;
     else if (hay.some((h) => h.startsWith(q))) score = 3;
     else if (hay.some((h) => h.includes(q) || q.includes(h))) score = 2;
     else if (words.length && words.some((w) => hay.some((h) => h.includes(w)))) score = 1;
     return { c, score };
   })
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name));
+    // Ties: the general case first ("Knee Pain" before "Knee Osteoarthritis"), then shorter names.
+    .sort((a, b) => b.score - a.score || +!!b.c.general - +!!a.c.general || a.c.name.length - b.c.name.length || a.c.name.localeCompare(b.c.name));
   return scored.slice(0, limit).map((x) => x.c);
+}
+
+/* Words that say nothing about which case it is: they are left out when suggesting from a free-text complaint. */
+const PLAIN = new Set(
+  (
+    "nyeri sakit pain ngilu linu pegal rasa terasa merasa dirasakan saat ketika waktu setelah sesudah sebelum sejak akibat karena " +
+    "sebab dan atau ada tidak tak nggak gak sedikit agak sangat sekali banget sering kadang masih sudah belum bisa dapat mau makin " +
+    "semakin lebih kurang juga lalu kemudian dengan untuk dari ini itu hari minggu bulan tahun kanan kiri kedua pasien keluhan " +
+    "mengeluh mengeluhkan nyaman jika bila kalau seperti mulai terus selalu tiba kambuh kaku bengkak susah sulit berat ringan " +
+    "bangun tidur pagi siang sore malam the and with after since when left right patient complains"
+  ).split(" "),
+);
+
+/* Each case's words, read once: from its name and keywords (strong), and from its mechanism of injury (weak). */
+let WORDS: { c: Condition; phrases: string[]; named: Set<string>; story: Set<string> }[] | null = null;
+function words() {
+  return (WORDS ??= CONDITIONS.map((c) => {
+    const phrases = [c.name, ...c.keywords].map(bare).filter((p) => p.length >= 3);
+    return { c, phrases, named: new Set(phrases.flatMap((p) => p.split(" "))), story: new Set(bare(c.mechanism).split(" ")) };
+  }));
+}
+
+/**
+ * Cases a free-text complaint may be, best first: "Nyeri pada lutut akibat salah tumpu saat bermain bola, ankle tidak
+ * nyaman" ranks knee and ankle cases, sprains above the rest. Whole phrases from the library count most, then single
+ * words of a case's name and keywords ("lutut", "ankle"), then words of its usual mechanism ("tumpu", "bola").
+ */
+export function suggestConditions(text: string, limit = 5): Condition[] {
+  const flat = bare(text);
+  const t = ` ${flat} `;
+  const toks = [...new Set(flat.split(" ").filter((w) => w.length >= 3 && !PLAIN.has(w) && !/^\d+$/.test(w)))];
+  if (!toks.length) return [];
+  const scored = words()
+    .map(({ c, phrases, named, story }) => {
+      let score = 0;
+      for (const p of phrases) if (t.includes(` ${p} `)) score += 4 + p.split(" ").length;
+      for (const w of toks) score += named.has(w) ? 2 : story.has(w) ? 0.75 : 0;
+      return { c, score };
+    })
+    .filter((x) => x.score >= 2)
+    // Ties: the general case, then the library's order (the common cases come first in it).
+    .sort((a, b) => b.score - a.score || +!!b.c.general - +!!a.c.general || CONDITIONS.indexOf(a.c) - CONDITIONS.indexOf(b.c));
+  return scored.slice(0, limit).map((x) => x.c);
+}
+
+/** Suggestions for what is typed under Keluhan: a word still being typed ("kne") by name, a sentence by its words. */
+export function conditionIdeas(text: string, limit = 5): Condition[] {
+  const n = bare(text).split(" ").filter(Boolean).length;
+  const out: Condition[] = [];
+  for (const c of [...suggestConditions(text, limit), ...(n <= 2 ? searchConditions(text, limit) : [])]) if (!out.includes(c)) out.push(c);
+  return out.slice(0, limit);
 }
 
 export const conditionByName = (name?: string | null) => CONDITIONS.find((c) => c.name === name) ?? null;
