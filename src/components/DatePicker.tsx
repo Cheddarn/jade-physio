@@ -17,6 +17,7 @@ export function DatePicker({
   onChange,
   children,
   marks,
+  waiting,
   className,
   align = "left",
 }: {
@@ -24,6 +25,8 @@ export function DatePicker({
   onChange: (key: string) => void;
   children: ReactNode;
   marks?: { col: string; field?: string; skip?: (row: Record<string, unknown>) => boolean };
+  /** Days with reports still to write (dateKey to how many): shaded, so they are easy to find and open. */
+  waiting?: Record<string, number>;
   className?: string;
   align?: "left" | "center";
 }) {
@@ -84,6 +87,9 @@ export function DatePicker({
     onChange(k);
     setOpen(false);
   };
+  // Waiting days in another month: a dot on that month's arrow.
+  const waitingBefore = !!waiting && Object.keys(waiting).some((k) => waiting[k] > 0 && k < `${month}-01`);
+  const waitingAfter = !!waiting && Object.keys(waiting).some((k) => waiting[k] > 0 && k > lastKey);
 
   return (
     <div ref={box} className={cx("relative", className)}>
@@ -108,12 +114,24 @@ export function DatePicker({
           )}
         >
           <div className="mb-2 flex items-center justify-between">
-            <button type="button" aria-label="Bulan sebelumnya" onClick={() => step(-1)} className="flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-line-soft">
+            <button
+              type="button"
+              aria-label={`Bulan sebelumnya${waitingBefore ? ", ada yang belum dibuat laporannya" : ""}`}
+              onClick={() => step(-1)}
+              className="relative flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-line-soft"
+            >
               <ChevronLeft className="size-5" />
+              {waitingBefore && <span className="absolute top-1.5 left-1.5 size-2 rounded-full bg-amber" />}
             </button>
             <p className="text-sm font-bold capitalize">{first.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</p>
-            <button type="button" aria-label="Bulan berikutnya" onClick={() => step(1)} className="flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-line-soft">
+            <button
+              type="button"
+              aria-label={`Bulan berikutnya${waitingAfter ? ", ada yang belum dibuat laporannya" : ""}`}
+              onClick={() => step(1)}
+              className="relative flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-line-soft"
+            >
               <ChevronRight className="size-5" />
+              {waitingAfter && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber" />}
             </button>
           </div>
           <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-muted">
@@ -124,34 +142,50 @@ export function DatePicker({
             ))}
           </div>
           <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((k, i) =>
-              k ? (
+            {cells.map((k, i) => {
+              if (!k) return <span key={`b${i}`} />;
+              const chosen = k === value;
+              const late = waiting?.[k] ?? 0;
+              return (
                 <button
                   key={k}
                   type="button"
                   onClick={() => pick(k)}
-                  aria-label={fromDateKey(k).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}
-                  aria-current={k === value ? "date" : undefined}
+                  aria-label={`${fromDateKey(k).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}${late ? `, ${late} belum ada laporan` : ""}`}
+                  aria-current={chosen ? "date" : undefined}
                   className={cx(
                     "relative flex h-10 flex-col items-center justify-center rounded-lg text-sm font-semibold transition-colors",
-                    k === value ? "bg-jade text-white" : k === today ? "text-jade ring-1 ring-jade ring-inset hover:bg-jade-mist" : "hover:bg-line-soft",
-                    (i % 7 === 6) && k !== value && "text-danger/80",
+                    chosen
+                      ? "bg-jade text-white"
+                      : late
+                        ? cx("bg-amber-mist text-amber hover:brightness-95", k === today && "ring-1 ring-jade ring-inset")
+                        : k === today
+                          ? "text-jade ring-1 ring-jade ring-inset hover:bg-jade-mist"
+                          : "hover:bg-line-soft",
+                    i % 7 === 6 && !chosen && !late && "text-danger/80",
                   )}
                 >
                   <span className="tnum leading-none">{Number(k.slice(8))}</span>
-                  {counts[k] ? (
-                    <span className={cx("tnum mt-0.5 text-[9px] leading-none font-bold", k === value ? "text-white/85" : "text-jade")}>
-                      {counts[k]}
-                    </span>
+                  {late ? (
+                    <span className={cx("tnum mt-0.5 text-[9px] leading-none font-bold text-amber", chosen && "rounded-full bg-amber-mist px-1 py-px")}>{late}</span>
+                  ) : counts[k] ? (
+                    <span className={cx("tnum mt-0.5 text-[9px] leading-none font-bold", chosen ? "text-white/85" : "text-jade")}>{counts[k]}</span>
                   ) : null}
                 </button>
-              ) : (
-                <span key={`b${i}`} />
-              ),
-            )}
+              );
+            })}
           </div>
           <div className="mt-2 flex items-center justify-between border-t border-line-soft pt-2">
-            {marks ? <span className="text-[11px] text-muted">Angka = jumlah booking</span> : <span />}
+            {waiting ? (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="size-3 rounded-[4px] bg-amber-mist ring-1 ring-amber/40 ring-inset" />
+                Belum ada laporan
+              </span>
+            ) : marks ? (
+              <span className="text-[11px] text-muted">Angka = jumlah booking</span>
+            ) : (
+              <span />
+            )}
             <button type="button" onClick={() => pick(today)} className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-jade hover:bg-jade-mist">
               Hari ini
             </button>
