@@ -93,15 +93,15 @@ service cloud.firestore {
       allow update, delete: if isManager() && myId() != email;
     }
 
-    // When each account last signed in and last used the report site (reading included), for the desk's Akun page.
-    // Everyone writes only their own, and only these two times; admins and managers read them all.
+    // When each account last signed in and last used the report site (reading included), for the Akun page.
+    // Everyone writes only their own, and only these two times; only admins read them (not managers, not the person).
     match /logins/{email} {
-      allow read: if isManager() || (signedIn() && myId() == email);
+      allow read: if isAdmin();
       allow create, update: if member() && myId() == email
         && request.resource.data.keys().hasOnly(['lastLoginAt', 'lastSeenAt'])
         && (!('lastLoginAt' in request.resource.data) || request.resource.data.lastLoginAt is number)
         && (!('lastSeenAt' in request.resource.data) || request.resource.data.lastSeenAt is number);
-      allow delete: if isManager();
+      allow delete: if isAdmin();
     }
 
     match /meta/setup {
