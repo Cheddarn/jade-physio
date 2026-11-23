@@ -104,6 +104,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Phones that get "Laporan diminta" notifications (report site): one per phone, saved by its owner, the
+    // address itself as the id. The site's server reads them with its own key to send; admins see who has them on.
+    match /pushTokens/{token} {
+      allow read: if isAdmin() || (signedIn() && resource.data.email == myId());
+      allow create, update: if member() && request.resource.data.email == myId()
+        && request.resource.data.token == token
+        && request.resource.data.keys().hasOnly(['token', 'email', 'staffId', 'role', 'updatedAt', 'device']);
+      allow delete: if isAdmin() || (signedIn() && resource.data.email == myId());
+    }
+
     match /meta/setup {
       allow read: if true;
       allow create: if signedIn() && !setupDone()
