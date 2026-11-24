@@ -114,6 +114,24 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && resource.data.email == myId());
     }
 
+    // Kamus (report site): what physios type by hand in reports, counted on each save, for the admin to add to the
+    // pick-lists. Whoever writes reports notes new items and counts them up (one more, nothing else); only the admin
+    // reviews them (adds, sets aside, tidies the wording) or deletes them.
+    match /kamus/{id} {
+      allow read: if clinical();
+      allow create: if clinical()
+        && request.resource.data.keys().hasOnly(['field', 'text', 'condition', 'count', 'who', 'firstAt', 'lastAt', 'status'])
+        && request.resource.data.field in ['treatment', 'advice', 'assessment', 'condition', 'mechanism']
+        && request.resource.data.status == 'new'
+        && request.resource.data.count == 1
+        && request.resource.data.text is string && request.resource.data.text.size() <= 2000;
+      allow update: if isAdmin()
+        || (clinical()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'who', 'lastAt'])
+          && request.resource.data.count == resource.data.count + 1);
+      allow delete: if isAdmin();
+    }
+
     match /meta/setup {
       allow read: if true;
       allow create: if signedIn() && !setupDone()
